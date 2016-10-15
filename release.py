@@ -9,7 +9,7 @@ class ReleaseFile():
     def __init__(self, path, url):
         self._path = path
         self._url = url
-        self._output_file = 'releases-test.json'
+        self._output_file = 'releases.json'
 
         self.display_name = {'WeTek_Play.arm': 'WeTek Play',
                              'WeTek_Play_2.aarch64': 'WeTek Play 2',
