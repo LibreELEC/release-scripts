@@ -109,6 +109,7 @@ class ReleaseFile():
 
         for train in trains:
             self.update_json[train] = {'url': url}
+            self.update_json[train]['prettyname_regex'] = '^LibreELEC-.*-([0-9]+\.[0-9]+\.[0-9]+)'
             self.update_json[train]['project'] = {}
             major_version = re.findall(r'([0-9]+).[0-9]', train)
             for build in builds:
