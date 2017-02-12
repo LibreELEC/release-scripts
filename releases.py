@@ -23,7 +23,7 @@ class ReleaseFile():
                              'S905.aarch64': 'Amlogic S905',
                              'S805.arm': 'Amlogic S805',
                              'Slice.arm': 'Slice (CM1)',
-                             'Slice2.arm': 'Slice 2 (CM3)',
+                             'Slice3.arm': 'Slice (CM3)',
                              'imx6.arm': 'Cubox-i2/i4 and Hummingboard (iMX6)',
                             }
 
