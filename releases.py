@@ -37,11 +37,11 @@ class ReleaseFile():
 
     def UpdateAll(self):
         outfile = os.path.join(self._path, self._output_file)
-        
+
         self.ReadFile(outfile)
-        
+
         self.UpdateFile(self._path, self._url)
-        
+
         self.WriteFile(outfile)
 
     def UpdateCombinedFile(self):
@@ -90,14 +90,14 @@ class ReleaseFile():
             regex = re.compile(r'([0-9]+)\.95\.[0-9]+')
             if regex.search(release):
                 trains.append(str(int(regex.findall(release)[0]) + 1))
-        
+
         trains = list(set(trains))
-        
+
         for i,train in enumerate(trains):
             trains[i] = 'LibreELEC-' + train + '.0'
-            
+
         print(trains)
-        
+
         builds = []
         for release in files:
             regex = re.compile(r'LibreELEC-(.*)-[0-9]')
@@ -115,11 +115,11 @@ class ReleaseFile():
             for build in builds:
                 self.update_json[train]['project'][build] = {'releases': {}}
                 self.update_json[train]['project'][build]['displayName'] = self.display_name[build]
-                releases = [x for x in files if (re.search(major_version[0] + '+.[0-9].[0-9]+', x) or 
-                                                 re.search(str(int(major_version[0]) - 1) + '+.90.[0-9]+', x) or 
-                                                 re.search(str(int(major_version[0]) - 1) + '+.95.[0-9]+', x)) and 
-                                                 re.search(build, x) and 
-                                                 re.search('.tar', x) and not 
+                releases = [x for x in files if (re.search(major_version[0] + '+.[0-9].[0-9]+', x) or
+                                                 re.search(str(int(major_version[0]) - 1) + '+.90.[0-9]+', x) or
+                                                 re.search(str(int(major_version[0]) - 1) + '+.95.[0-9]+', x)) and
+                                                 re.search(build, x) and
+                                                 re.search('.tar', x) and not
                                                  re.search('noobs', x)]
                 for i,release in enumerate(sorted(releases)):
                     key = "%s;%s;%s" % (train, build, release)
@@ -139,8 +139,8 @@ class ReleaseFile():
                     self.update_json[train]['project'][build]['releases'][i] = {'file': {'name': release}}
                     self.update_json[train]['project'][build]['releases'][i]['file']['sha256'] = file_digest
                     self.update_json[train]['project'][build]['releases'][i]['file']['size'] = file_size
-        
-                    # .img.gz            
+
+                    # .img.gz
                     image = [x for x in files if re.match(release.strip('.tar') + '.img.gz', x)]
                     try:
                         key = "%s;%s;%s" % (train, build, image[0])
@@ -192,6 +192,6 @@ if len(sys.argv) < 2:
     print("ERROR: Need to know which project - RPi, RPi2, Generic etc.")
     sys.exit(1)
 '''
-            
+
 with ReleaseFile('/var/www/releases.libreelec.tv/', 'http://releases.libreelec.tv/') as rf:
     rf.UpdateAll()
