@@ -33,11 +33,11 @@ from collections import OrderedDict
 #   10.1.001   10.2
 #
 VERSIONS = [
-               ['pre-alpha', 1.0, '80',],
-               ['alpha',     1.0, '90',],
-               ['beta',      1.0, '95',],
-               ['unstable',  0.1, '[1,3,5,7]'],
-               ['stable',    0.0, '[0,2,4,6]'],
+               ['pre-alpha', 0.20, '80',],
+               ['alpha',     0.10, '90',],
+               ['beta',      0.05, '95',],
+               ['unstable',  0.10, '[1,3,5,7]'],
+               ['stable',    0.00, '[0,2,4,6]'],
            ]
 
 JSON_FILE = 'releases.json'
@@ -143,8 +143,6 @@ class ReleaseFile():
             if match:
                 adjust = VERSIONS[version]['adjust']
                 item_maj_min = float(match.groups(0)[0]) + adjust
-                if adjust >= 1.0:
-                    item_maj_min = float(int(item_maj_min))
                 return item_maj_min
         return None
 
