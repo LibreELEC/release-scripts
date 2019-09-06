@@ -42,6 +42,8 @@ VERSIONS = [
 
 JSON_FILE = 'releases.json'
 
+DISTRO_NAME = 'LibreELEC'
+
 class ChunkedHash():
     # Calculate hash for chunked data
     @staticmethod
@@ -90,8 +92,8 @@ class ReleaseFile():
             raise Exception('ERROR: %s is not a valid path' % self._outdir)
 
         self._regex_custom_sort = re.compile(r'([0-9]+)\.([0-9]+)\.([0-9]+)')
-        self._regex_train = re.compile(r'([0-9]+.[0-9]+)')
-        self._regex_builds = re.compile(r'LibreELEC-([^-]*)-.*')
+        self._regex_builds = re.compile(r'%s-([^-]*)-.*' % DISTRO_NAME)
+        self._regex_builder = re.compile(r'%s-[^-]*-(.*)-[0-9]+\.[0-9]+\.[0-9]+' % DISTRO_NAME)
 
         self.display_name = {'A64.arm': 'Allwinner A64',
                              'AMLG12.arm': 'Amlogic G12A/G12B/SM1',
@@ -141,19 +143,46 @@ class ReleaseFile():
         for version in VERSIONS:
             match = VERSIONS[version]['regex'].search(item)
             if match:
+                sbuilder = self._regex_builder.search(item)
+                if sbuilder:
+                    builder = sbuilder.groups(0)[0]
+                else:
+                    builder = DISTRO_NAME
                 adjust = VERSIONS[version]['adjust']
                 item_maj_min = float(match.groups(0)[0]) + adjust
-                return item_maj_min
+                return '%s-%0.1f' % (builder, item_maj_min)
         return None
 
-    def match_version(self, item, build, train_major_minor):
-        if item.startswith('LibreELEC-%s-' % build) and \
-           float(train_major_minor[0]) == self.get_train_major_minor(item):
+    def match_version(self, item, build, train):
+        train_items = train.split('-')
+        builder = train_items[0]
+        major_minor = train_items[1]
+        if builder == DISTRO_NAME:
+            prefix = '%s-%s-' % (DISTRO_NAME, build)
+        else:
+            prefix = '%s-%s-%s-' % (DISTRO_NAME, build, builder)
+
+        if item.startswith(prefix) and \
+           train == self.get_train_major_minor(item):
             return True
 
         return False
 
-    def custom_sort(self, a, b):
+    def custom_sort_train(self, a, b):
+        a_items = a.split('-')
+        b_items = b.split('-')
+
+        a_builder = a_items[0]
+        b_builder = b_items[0]
+
+        if (a_builder == b_builder):
+          return (float(a_items[1]) - float(b_items[1]))
+        elif (a_builder < b_builder):
+          return -1
+        elif (a_builder > b_builder):
+          return +1
+
+    def custom_sort_release(self, a, b):
         a_maj_min_patch = self._regex_custom_sort.search(a)
         b_maj_min_patch = self._regex_custom_sort.search(b)
 
@@ -205,7 +234,7 @@ class ReleaseFile():
         files = []
         for (dirpath, dirnames, filenames) in os.walk(path):
             for f in filenames:
-                if f.startswith('LibreELEC-') and \
+                if f.startswith('%s-' % DISTRO_NAME) and \
                    f.endswith('.tar') and \
                    not f.endswith('-noobs.tar'):
                     files.append(f)
@@ -220,8 +249,9 @@ class ReleaseFile():
 
         # Create a unique sorted list of release trains (8.0, 8.2, 9.0 etc.)
         trains = []
-        for train in sorted(list(set(releases))):
-            trains.append('LibreELEC-%0.1f' % train)
+
+        for train in sorted(list(set(releases)), key=cmp_to_key(self.custom_sort_train)):
+            trains.append(train)
 
         print(trains)
 
@@ -237,14 +267,13 @@ class ReleaseFile():
         # For each train, add or update each matching build (tar and img.gz)
         for train in trains:
             self.update_json[train] = {'url': url}
-            self.update_json[train]['prettyname_regex'] = '^LibreELEC-.*-([0-9]+\.[0-9]+\.[0-9]+)'
+            self.update_json[train]['prettyname_regex'] = '^%s-.*-([0-9]+\.[0-9]+\.[0-9]+)' % DISTRO_NAME
             self.update_json[train]['project'] = {}
-            major_minor_version = self._regex_train.findall(train)
             for build in builds:
                 self.update_json[train]['project'][build] = {'releases': {}}
                 self.update_json[train]['project'][build]['displayName'] = self.display_name[build]
 
-                releases = sorted([x for x in files if self.match_version(x, build, major_minor_version)], key=cmp_to_key(self.custom_sort))
+                releases = sorted([x for x in files if self.match_version(x, build, train)], key=cmp_to_key(self.custom_sort_release))
 
                 for i, release in enumerate(releases):
                     key = '%s;%s;%s' % (train, build, release)
@@ -279,6 +308,12 @@ class ReleaseFile():
                         self.update_json[train]['project'][build]['releases'][i]['image'] = {'name': ''}
                         self.update_json[train]['project'][build]['releases'][i]['image']['sha256'] = ''
                         self.update_json[train]['project'][build]['releases'][i]['image']['size'] = ''
+
+        # Delete builds without releases
+        for train in list(self.update_json):
+            for build in list(self.update_json[train]['project']):
+                if self.update_json[train]['project'][build]['releases'] == {}:
+                    del self.update_json[train]['project'][build]
 
     # Read old file if it exists, to avoid recalculating hashes when possible
     def ReadFile(self):
@@ -318,7 +353,7 @@ for item in VERSIONS:
                   'regex': re.compile(r'([0-9]+\.%s)\.[0-9]+' % item[2])}
 VERSIONS = _
 
-parser = argparse.ArgumentParser(description='Update LibreELEC %s with available tar/img.gz files.' % JSON_FILE, \
+parser = argparse.ArgumentParser(description='Update %s %s with available tar/img.gz files.' % (DISTRO_NAME, JSON_FILE), \
                                  formatter_class=lambda prog: argparse.HelpFormatter(prog,max_help_position=25,width=90))
 
 parser.add_argument('-i', '--input', metavar='DIRECTORY', required=True, \
