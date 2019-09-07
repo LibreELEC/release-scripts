@@ -44,6 +44,8 @@ JSON_FILE = 'releases.json'
 
 DISTRO_NAME = 'LibreELEC'
 
+PRETTYNAME = '^%s-.*-([0-9]+\.[0-9]+\.[0-9]+)' % DISTRO_NAME
+
 class ChunkedHash():
     # Calculate hash for chunked data
     @staticmethod
@@ -84,6 +86,11 @@ class ReleaseFile():
 
         self._infile  = os.path.join(self._indir, self._json_file)
         self._outfile = os.path.join(self._outdir, self._json_file)
+
+        if args.prettyname:
+            self._prettyname = args.prettyname
+        else:
+            self._prettyname = PRETTYNAME
 
         if not os.path.exists(self._indir):
             raise Exception('ERROR: %s is not a valid path' % self._indir)
@@ -267,7 +274,7 @@ class ReleaseFile():
         # For each train, add or update each matching build (tar and img.gz)
         for train in trains:
             self.update_json[train] = {'url': url}
-            self.update_json[train]['prettyname_regex'] = '^%s-.*-([0-9]+\.[0-9]+\.[0-9]+)' % DISTRO_NAME
+            self.update_json[train]['prettyname_regex'] = self._prettyname
             self.update_json[train]['project'] = {}
             for build in builds:
                 self.update_json[train]['project'][build] = {'releases': {}}
@@ -365,6 +372,9 @@ parser.add_argument('-u', '--url', metavar='URL', required=True, \
 
 parser.add_argument('-o', '--output', metavar='DIRECTORY', required=False, \
                     help='Optional directory into which %s will be written. Defaults to same directory as --input.' % JSON_FILE)
+
+parser.add_argument('-p', '--prettyname', metavar='REGEX', required=False, \
+                    help='Optional prettyname regex, default is %s' % PRETTYNAME)
 
 args = parser.parse_args()
 
