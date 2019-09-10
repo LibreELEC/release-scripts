@@ -198,6 +198,18 @@ class ReleaseFile():
 
         return (a_int - b_int)
 
+    def get_details(self, path, train, build, file):
+        key = '%s;%s;%s' % (train, build, file)
+        if key not in self.oldhash:
+            print('Adding: %s in %s train' % (file, train))
+            file_digest = ChunkedHash().calculate_sha256(os.path.join(path, file))
+            file_size = str(os.path.getsize(os.path.join(path, file)))
+        else:
+            file_digest = self.oldhash[key]['sha256']
+            file_size = self.oldhash[key]['size']
+
+        return (file_digest, file_size)
+
     def UpdateAll(self):
         self.ReadFile()
 
@@ -239,12 +251,14 @@ class ReleaseFile():
         # img.gz for the tar file.
         #
         files = []
+        images = []
         for (dirpath, dirnames, filenames) in os.walk(path):
             for f in filenames:
-                if f.startswith('%s-' % DISTRO_NAME) and \
-                   f.endswith('.tar') and \
-                   not f.endswith('-noobs.tar'):
-                    files.append(f)
+                if f.startswith('%s-' % DISTRO_NAME):
+                    if f.endswith('.tar') and not f.endswith('-noobs.tar'):
+                        files.append(f)
+                    elif f.endswith('.img.gz'):
+                        images.append(f)
             break
 
         # From files, identify all release trains (8.0, 8.0, 8.2, 9.0 etc.)
@@ -276,51 +290,40 @@ class ReleaseFile():
             self.update_json[train] = {'url': url}
             self.update_json[train]['prettyname_regex'] = self._prettyname
             self.update_json[train]['project'] = {}
-            for build in builds:
-                self.update_json[train]['project'][build] = {'releases': {}}
-                self.update_json[train]['project'][build]['displayName'] = self.display_name[build]
 
+            for build in builds:
                 releases = sorted([x for x in files if self.match_version(x, build, train)], key=cmp_to_key(self.custom_sort_release))
 
+                entries = {}
                 for i, release in enumerate(releases):
-                    key = '%s;%s;%s' % (train, build, release)
-                    if key not in self.oldhash:
-                        print('Adding: %s in %s train' % (release, train))
-                        file_digest = ChunkedHash().calculate_sha256(os.path.join(path, release))
-                        file_size = str(os.path.getsize(os.path.join(path, release)))
-                    else:
-                        file_digest = self.oldhash[key]['sha256']
-                        file_size = self.oldhash[key]['size']
+                    entry = {'file': {}}
 
                     # .tar
-                    self.update_json[train]['project'][build]['releases'][i] = {'file': {'name': release}}
-                    self.update_json[train]['project'][build]['releases'][i]['file']['sha256'] = file_digest
-                    self.update_json[train]['project'][build]['releases'][i]['file']['size'] = file_size
+                    (file_digest, file_size) = self.get_details(path, train, build, release)
+                    entry['file'] = {'name': release, 'sha256': file_digest, 'size': file_size}
 
                     # .img.gz
                     image = re.sub('\.tar$', '.img.gz', release)
-                    if os.path.exists(os.path.join(path, image)):
-                        key = '%s;%s;%s' % (train, build, image)
-                        if key not in self.oldhash:
-                            print('Adding: %s in %s train' % (image, train))
-                            file_digest = ChunkedHash().calculate_sha256(os.path.join(path, image))
-                            file_size = str(os.path.getsize(os.path.join(path, image)))
-                        else:
-                            file_digest = self.oldhash[key]['sha256']
-                            file_size = self.oldhash[key]['size']
-                        self.update_json[train]['project'][build]['releases'][i]['image'] = {'name': image}
-                        self.update_json[train]['project'][build]['releases'][i]['image']['sha256'] = file_digest
-                        self.update_json[train]['project'][build]['releases'][i]['image']['size'] = file_size
+                    if image in images:
+                        (file_digest, file_size) = self.get_details(path, train, build, image)
                     else:
-                        self.update_json[train]['project'][build]['releases'][i]['image'] = {'name': ''}
-                        self.update_json[train]['project'][build]['releases'][i]['image']['sha256'] = ''
-                        self.update_json[train]['project'][build]['releases'][i]['image']['size'] = ''
+                        image = file_digest = file_size = ''
+                    entry['image'] = {'name': image, 'sha256': file_digest, 'size': file_size}
 
-        # Delete builds without releases
-        for train in list(self.update_json):
-            for build in list(self.update_json[train]['project']):
-                if self.update_json[train]['project'][build]['releases'] == {}:
-                    del self.update_json[train]['project'][build]
+                    # u-boot board-specific .img.gz
+                    uboot = []
+                    for image in sorted([x for x in images if x.startswith(re.sub('\.tar$', '-', release))]):
+                        (file_digest, file_size) = self.get_details(path, train, build, image)
+                        uboot.append({'name': image, 'sha256': file_digest, 'size': file_size})
+                    # Add u-boot if we have any entries, remove if not
+                    if uboot != []:
+                        entry['uboot'] = uboot
+
+                    entries[i] = entry
+
+                # Only add builds with releases
+                if len(entries) != 0:
+                    self.update_json[train]['project'][build] = {'displayName': self.display_name[build], 'releases': entries}
 
     # Read old file if it exists, to avoid recalculating hashes when possible
     def ReadFile(self):
@@ -337,6 +340,11 @@ class ReleaseFile():
                                 try:
                                     i = oldjson[train]['project'][build]['releases'][release]['image']
                                     self.oldhash['%s;%s;%s' % (train, build, i['name'])] = {'sha256': i['sha256'], 'size': i['size']}
+                                except:
+                                    pass
+                                try:
+                                    for i in oldjson[train]['project'][build]['releases'][release]['uboot']:
+                                        self.oldhash['%s;%s;%s' % (train, build, i['name'])] = {'sha256': i['sha256'], 'size': i['size']}
                                 except:
                                     pass
             except:
