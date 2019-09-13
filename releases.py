@@ -100,7 +100,6 @@ class ReleaseFile():
 
         self._regex_custom_sort = re.compile(r'([0-9]+)\.([0-9]+)\.([0-9]+)')
         self._regex_builds = re.compile(r'%s-([^-]*)-.*' % DISTRO_NAME)
-        self._regex_builder = re.compile(r'%s-[^-]*-(.*)-[0-9]+\.[0-9]+\.[0-9]+' % DISTRO_NAME)
 
         self.display_name = {'A64.arm': 'Allwinner A64',
                              'AMLG12.arm': 'Amlogic G12A/G12B/SM1',
@@ -150,28 +149,19 @@ class ReleaseFile():
         for version in VERSIONS:
             match = VERSIONS[version]['regex'].search(item)
             if match:
-                sbuilder = self._regex_builder.search(item)
-                if sbuilder:
-                    builder = sbuilder.groups(0)[0]
-                else:
-                    builder = DISTRO_NAME
                 adjust = VERSIONS[version]['adjust']
                 item_maj_min = float(match.groups(0)[0]) + adjust
-                return '%s-%0.1f' % (builder, item_maj_min)
+                return '%s-%0.1f' % (DISTRO_NAME, item_maj_min)
         return None
 
     def match_version(self, item, build, train):
         train_items = train.split('-')
-        builder = train_items[0]
-        major_minor = train_items[1]
-        if builder == DISTRO_NAME:
-            prefix = '%s-%s-' % (DISTRO_NAME, build)
-        else:
-            prefix = '%s-%s-%s-' % (DISTRO_NAME, build, builder)
 
-        if item.startswith(prefix) and \
+        major_minor = train_items[1]
+
+        if item.startswith('%s-%s-' % (DISTRO_NAME, build)) and \
            train == self.get_train_major_minor(item):
-            return True
+           return True
 
         return False
 
