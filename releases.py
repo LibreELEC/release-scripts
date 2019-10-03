@@ -363,7 +363,7 @@ _ = OrderedDict()
 for item in VERSIONS:
     _[item[0]] = {'adjust': item[1],
                   'minor': item[2],
-                  'regex': re.compile(r'([0-9]+\.%s)' % item[2])}
+                  'regex': re.compile(r'-([0-9]+\.%s)[-.]' % item[2])}
 VERSIONS = _
 
 parser = argparse.ArgumentParser(description='Update %s %s with available tar/img.gz files.' % (DISTRO_NAME, JSON_FILE), \
