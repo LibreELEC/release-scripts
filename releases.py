@@ -98,7 +98,8 @@ class ReleaseFile():
         if not os.path.exists(self._outdir):
             raise Exception('ERROR: %s is not a valid path' % self._outdir)
 
-        self._regex_custom_sort = re.compile(r'([0-9]+)\.([0-9]+)\.([0-9]+)')
+        self._regex_xyz_custom_sort = re.compile(r'([0-9]+)\.([0-9]+)\.([0-9]+)')
+        self._regex_xydate_custom_sort = re.compile(r'([0-9]+)\.([0-9]+)-.*-([0-9]{14})-')
         self._regex_builds = re.compile(r'%s-([^-]*)-.*' % DISTRO_NAME)
 
         self.display_name = {'A64.arm': 'Allwinner A64',
@@ -180,11 +181,16 @@ class ReleaseFile():
           return +1
 
     def custom_sort_release(self, a, b):
-        a_maj_min_patch = self._regex_custom_sort.search(a)
-        b_maj_min_patch = self._regex_custom_sort.search(b)
+        a_maj_min_patch = self._regex_xyz_custom_sort.search(a)
+        if not a_maj_min_patch:
+            a_maj_min_patch = self._regex_xydate_custom_sort.search(a)
 
-        a_int = int('%04d%04d%04d' % (int(a_maj_min_patch.groups(0)[0]), int(a_maj_min_patch.groups(0)[1]), int(a_maj_min_patch.groups(0)[2])))
-        b_int = int('%04d%04d%04d' % (int(b_maj_min_patch.groups(0)[0]), int(b_maj_min_patch.groups(0)[1]), int(b_maj_min_patch.groups(0)[2])))
+        b_maj_min_patch = self._regex_xyz_custom_sort.search(b)
+        if not b_maj_min_patch:
+            b_maj_min_patch = self._regex_xydate_custom_sort.search(b)
+
+        a_int = int('%04d%04d%014d' % (int(a_maj_min_patch.groups(0)[0]), int(a_maj_min_patch.groups(0)[1]), int(a_maj_min_patch.groups(0)[2])))
+        b_int = int('%04d%04d%014d' % (int(b_maj_min_patch.groups(0)[0]), int(b_maj_min_patch.groups(0)[1]), int(b_maj_min_patch.groups(0)[2])))
 
         return (a_int - b_int)
 
@@ -355,7 +361,7 @@ _ = OrderedDict()
 for item in VERSIONS:
     _[item[0]] = {'adjust': item[1],
                   'minor': item[2],
-                  'regex': re.compile(r'([0-9]+\.%s)\.[0-9]+' % item[2])}
+                  'regex': re.compile(r'([0-9]+\.%s)' % item[2])}
 VERSIONS = _
 
 parser = argparse.ArgumentParser(description='Update %s %s with available tar/img.gz files.' % (DISTRO_NAME, JSON_FILE), \
