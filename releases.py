@@ -263,6 +263,8 @@ class ReleaseFile():
             train_major_minor = self.get_train_major_minor(release)
             if train_major_minor:
                 releases.append(train_major_minor)
+            elif args.verbose:
+                print('IGNORED [Failed to match any train]: %s' % release)
 
         # Create a unique sorted list of release trains (8.0, 8.2, 9.0 etc.)
         trains = []
@@ -379,6 +381,8 @@ parser.add_argument('-o', '--output', metavar='DIRECTORY', required=False, \
 
 parser.add_argument('-p', '--prettyname', metavar='REGEX', required=False, \
                     help='Optional prettyname regex, default is %s' % PRETTYNAME)
+
+parser.add_argument('-v', '--verbose', action="store_true", help='Enable verbose output (ignored files etc.)')
 
 args = parser.parse_args()
 
