@@ -46,6 +46,8 @@ DISTRO_NAME = 'LibreELEC'
 
 PRETTYNAME = '^%s-.*-([0-9]+\.[0-9]+\.[0-9]+)' % DISTRO_NAME
 
+PRETTYNAME_NIGHTLY = '^LibreELEC-.*-([0-9]+\.[0-9]+\-.*-[0-9]{8}-[0-9a-z]{7})' % DISTRO_NAME
+
 class ChunkedHash():
     # Calculate hash for chunked data
     @staticmethod
