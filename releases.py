@@ -100,6 +100,7 @@ class ReleaseFile():
 
         self._regex_xyz_custom_sort = re.compile(r'([0-9]+)\.([0-9]+)\.([0-9]+)')
         self._regex_xydate_custom_sort = re.compile(r'([0-9]+)\.([0-9]+)-.*-([0-9]{14})-')
+        self._regex_xydate_custom_short_sort = re.compile(r'([0-9]+)\.([0-9]+)-.*-([0-9]{8})-')
         self._regex_builds = re.compile(r'%s-([^-]*)-.*' % DISTRO_NAME)
 
         self.display_name = {'A64.arm': 'Allwinner A64',
@@ -185,9 +186,15 @@ class ReleaseFile():
         if not a_maj_min_patch:
             a_maj_min_patch = self._regex_xydate_custom_sort.search(a)
 
+        if not a_maj_min_patch:
+            a_maj_min_patch = self._regex_xydate_custom_short_sort.search(a)
+
         b_maj_min_patch = self._regex_xyz_custom_sort.search(b)
         if not b_maj_min_patch:
             b_maj_min_patch = self._regex_xydate_custom_sort.search(b)
+
+        if not b_maj_min_patch:
+            b_maj_min_patch = self._regex_xydate_custom_short_sort.search(b)
 
         a_int = int('%04d%04d%014d' % (int(a_maj_min_patch.groups(0)[0]), int(a_maj_min_patch.groups(0)[1]), int(a_maj_min_patch.groups(0)[2])))
         b_int = int('%04d%04d%014d' % (int(b_maj_min_patch.groups(0)[0]), int(b_maj_min_patch.groups(0)[1]), int(b_maj_min_patch.groups(0)[2])))
@@ -321,7 +328,10 @@ class ReleaseFile():
 
                 # Only add builds with releases
                 if len(entries) != 0:
-                    self.update_json[train]['project'][build] = {'displayName': self.display_name[build], 'releases': entries}
+                    if build in self.display_name:
+                        self.update_json[train]['project'][build] = {'displayName': self.display_name[build], 'releases': entries}
+                    else:
+                        self.update_json[train]['project'][build] = {'displayName': build, 'releases': entries}
 
     # Read old file if it exists, to avoid recalculating hashes when possible
     def ReadFile(self):
