@@ -46,7 +46,8 @@ DISTRO_NAME = 'LibreELEC'
 
 PRETTYNAME = '^%s-.*-([0-9]+\.[0-9]+\.[0-9]+)' % DISTRO_NAME
 
-PRETTYNAME_NIGHTLY = '^LibreELEC-.*-([0-9]+\.[0-9]+\-.*-[0-9]{8}-[0-9a-z]{7})' % DISTRO_NAME
+# For DEVEL(14 numbers), NIGHTLY(8 numbers), DAILY (7 numbers), WEEKLY (6 numbers), MONTHLY (6 numbers) builds
+PRETTYNAME_DEVELOPMENT_BUILDS = '^%s-.*-([0-9]+\.[0-9]+\-.*\-[0-9]{6,14}-[0-9a-z]{7})' % DISTRO_NAME
 
 class ChunkedHash():
     # Calculate hash for chunked data
@@ -102,7 +103,7 @@ class ReleaseFile():
 
         self._regex_xyz_custom_sort = re.compile(r'([0-9]+)\.([0-9]+)\.([0-9]+)')
         self._regex_xydate_custom_sort = re.compile(r'([0-9]+)\.([0-9]+)-.*-([0-9]{14})-')
-        self._regex_xydate_custom_short_sort = re.compile(r'([0-9]+)\.([0-9]+)-.*-([0-9]{8})-')
+        self._regex_xydate_custom_short_sort = re.compile(r'([0-9]+)\.([0-9]+)-.*-([0-9]{6,8})-')
         self._regex_builds = re.compile(r'%s-([^-]*)-.*' % DISTRO_NAME)
 
         self.display_name = {'A64.arm': 'Allwinner A64',
