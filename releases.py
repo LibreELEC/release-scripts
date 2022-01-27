@@ -93,7 +93,10 @@ class ReleaseFile():
         if args.prettyname:
             self._prettyname = args.prettyname
         else:
-            self._prettyname = PRETTYNAME
+            if args.dev_prettyname:
+                self._prettyname = PRETTYNAME_DEVELOPMENT_BUILDS
+            else:
+                self._prettyname = PRETTYNAME
 
         if not os.path.exists(self._indir):
             raise Exception('ERROR: %s is not a valid path' % self._indir)
@@ -394,6 +397,9 @@ parser.add_argument('-o', '--output', metavar='DIRECTORY', required=False, \
 
 parser.add_argument('-p', '--prettyname', metavar='REGEX', required=False, \
                     help='Optional prettyname regex, default is %s' % PRETTYNAME)
+
+parser.add_argument('-d', '--dev_prettyname', action="store_true", required=False, \
+                    help=' Enable prettyname regex for development builds (devel, nightly, daily, weekly, monthly)')
 
 parser.add_argument('-v', '--verbose', action="store_true", help='Enable verbose output (ignored files etc.)')
 
