@@ -195,12 +195,18 @@ class ReleaseFile():
         if not a_maj_min_patch:
             a_maj_min_patch = self._regex_xydate_custom_short_sort.search(a)
 
+        if not a_maj_min_patch:
+            raise Exception('ERROR: Filename not like expected')
+
         b_maj_min_patch = self._regex_xyz_custom_sort.search(b)
         if not b_maj_min_patch:
             b_maj_min_patch = self._regex_xydate_custom_sort.search(b)
 
         if not b_maj_min_patch:
             b_maj_min_patch = self._regex_xydate_custom_short_sort.search(b)
+
+        if not b_maj_min_patch:
+            raise Exception('ERROR: Filename not like expected')
 
         a_int = int('%04d%04d%014d' % (int(a_maj_min_patch.groups(0)[0]), int(a_maj_min_patch.groups(0)[1]), int(a_maj_min_patch.groups(0)[2])))
         b_int = int('%04d%04d%014d' % (int(b_maj_min_patch.groups(0)[0]), int(b_maj_min_patch.groups(0)[1]), int(b_maj_min_patch.groups(0)[2])))
