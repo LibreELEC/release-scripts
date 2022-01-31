@@ -47,7 +47,8 @@ DISTRO_NAME = 'LibreELEC'
 
 PRETTYNAME = '^%s-.*-([0-9]+\.[0-9]+\.[0-9]+)' % DISTRO_NAME
 
-PRETTYNAME_NIGHTLY = '^LibreELEC-.*-([0-9]+\.[0-9]+\-.*-[0-9]{8}-[0-9a-z]{7})' % DISTRO_NAME
+# For DEVEL(14 numbers), NIGHTLY(8 numbers), DAILY (7 numbers), WEEKLY (6 numbers), MONTHLY (6 numbers) builds
+PRETTYNAME_DEVELOPMENT_BUILDS = '^%s-.*-([0-9]+\.[0-9]+\-.*\-[0-9]{6,14}-[0-9a-z]{7})' % DISTRO_NAME
 
 class ChunkedHash():
     # Calculate hash for chunked data
@@ -93,7 +94,10 @@ class ReleaseFile():
         if args.prettyname:
             self._prettyname = args.prettyname
         else:
-            self._prettyname = PRETTYNAME
+            if args.dev_prettyname:
+                self._prettyname = PRETTYNAME_DEVELOPMENT_BUILDS
+            else:
+                self._prettyname = PRETTYNAME
 
         if not os.path.exists(self._indir):
             raise Exception('ERROR: %s is not a valid path' % self._indir)
@@ -103,7 +107,7 @@ class ReleaseFile():
 
         self._regex_xyz_custom_sort = re.compile(r'([0-9]+)\.([0-9]+)\.([0-9]+)')
         self._regex_xydate_custom_sort = re.compile(r'([0-9]+)\.([0-9]+)-.*-([0-9]{14})-')
-        self._regex_xydate_custom_short_sort = re.compile(r'([0-9]+)\.([0-9]+)-.*-([0-9]{8})-')
+        self._regex_xydate_custom_short_sort = re.compile(r'([0-9]+)\.([0-9]+)-.*-([0-9]{6,8})-')
         self._regex_builds = re.compile(r'%s-([^-]*)-.*' % DISTRO_NAME)
 
         self.display_name = {'A64.arm': 'Allwinner A64',
@@ -197,12 +201,18 @@ class ReleaseFile():
         if not a_maj_min_patch:
             a_maj_min_patch = self._regex_xydate_custom_short_sort.search(a)
 
+        if not a_maj_min_patch:
+            raise Exception('ERROR: Filename not like expected')
+
         b_maj_min_patch = self._regex_xyz_custom_sort.search(b)
         if not b_maj_min_patch:
             b_maj_min_patch = self._regex_xydate_custom_sort.search(b)
 
         if not b_maj_min_patch:
             b_maj_min_patch = self._regex_xydate_custom_short_sort.search(b)
+
+        if not b_maj_min_patch:
+            raise Exception('ERROR: Filename not like expected')
 
         a_int = int('%04d%04d%014d' % (int(a_maj_min_patch.groups(0)[0]), int(a_maj_min_patch.groups(0)[1]), int(a_maj_min_patch.groups(0)[2])))
         b_int = int('%04d%04d%014d' % (int(b_maj_min_patch.groups(0)[0]), int(b_maj_min_patch.groups(0)[1]), int(b_maj_min_patch.groups(0)[2])))
@@ -399,6 +409,9 @@ parser.add_argument('-o', '--output', metavar='DIRECTORY', required=False, \
 
 parser.add_argument('-p', '--prettyname', metavar='REGEX', required=False, \
                     help='Optional prettyname regex, default is %s' % PRETTYNAME)
+
+parser.add_argument('-d', '--dev_prettyname', action="store_true", required=False, \
+                    help=' Enable prettyname regex for development builds (devel, nightly, daily, weekly, monthly)')
 
 parser.add_argument('-v', '--verbose', action="store_true", help='Enable verbose output (ignored files etc.)')
 
