@@ -110,6 +110,7 @@ class ReleaseFile():
                              'AMLG12.arm': 'Amlogic G12A/G12B/SM1',
                              'AMLGX.arm': 'Amlogic GXBB/GXL/GXM',
                              'Dragonboard.arm': 'Qualcomm Dragonboard',
+                             'FORMAT.any': 'Tools',
                              'Generic.x86_64': 'Generic AMD/Intel/NVIDIA (x86_64)',
                              'H3.arm': 'Allwinner H3',
                              'H6.arm': 'Allwinner H6',
