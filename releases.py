@@ -47,7 +47,7 @@ DISTRO_NAME = 'LibreELEC'
 
 PRETTYNAME = '^%s-.*-([0-9]+\.[0-9]+\.[0-9]+)' % DISTRO_NAME
 
-PRETTYNAME_NIGHTLY = '^LibreELEC-.*-([0-9]+\.[0-9]+\-.*-[0-9]{8}-[0-9a-z]{7})' % DISTRO_NAME
+PRETTYNAME_NIGHTLY = '^%s-.*-([0-9]+\.[0-9]+\-.*-[0-9]{8}-[0-9a-z]{7})' % DISTRO_NAME
 
 class ChunkedHash():
     # Calculate hash for chunked data
@@ -264,13 +264,13 @@ class ReleaseFile():
         files = []
         images = []
         for (dirpath, dirnames, filenames) in os.walk(path):
+            current_dir = dirpath.lstrip(path + os.sep)
             for f in filenames:
                 if f.startswith('%s-' % DISTRO_NAME):
                     if f.endswith('.tar') and not f.endswith('-noobs.tar'):
-                        files.append(f)
+                        files.append(os.path.join(current_dir, f))
                     elif f.endswith('.img.gz'):
-                        images.append(f)
-            break
+                        images.append(os.path.join(current_dir, f))
 
         # From files, identify all release trains (8.0, 8.0, 8.2, 9.0 etc.)
         releases = []
@@ -291,7 +291,8 @@ class ReleaseFile():
 
         # Create a unique sorted list of builds (eg. RPi2.arm, Generix.x86_64 etc.)
         builds = []
-        for release in files:
+        for f in files:
+            release=os.path.basename(f)
             if self._regex_builds.match(release):
                 builds.append(self._regex_builds.findall(release)[0])
         builds = sorted(list(set(builds)))
@@ -305,7 +306,7 @@ class ReleaseFile():
             self.update_json[train]['project'] = {}
 
             for build in builds:
-                releases = sorted([x for x in files if self.match_version(x, build, train)], key=cmp_to_key(self.custom_sort_release))
+                releases = sorted([x for x in files if self.match_version(os.path.basename(x), build, train)], key=cmp_to_key(self.custom_sort_release))
 
                 entries = {}
                 for i, release in enumerate(releases):
