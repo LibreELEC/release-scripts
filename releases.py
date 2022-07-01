@@ -3,6 +3,8 @@
 # SPDX-License-Identifier: GPL-2.0
 # Copyright (C) 2016-present Team LibreELEC (https://libreelec.tv)
 
+# requires python >= 3.9
+
 import os
 import sys
 import re
@@ -42,12 +44,9 @@ VERSIONS = [
            ]
 
 JSON_FILE = 'releases.json'
-
 DISTRO_NAME = 'LibreELEC'
-
 PRETTYNAME = '^%s-.*-([0-9]+\.[0-9]+\.[0-9]+)' % DISTRO_NAME
-
-PRETTYNAME_NIGHTLY = '^LibreELEC-.*-([0-9]+\.[0-9]+\-.*-[0-9]{8}-[0-9a-z]{7})' % DISTRO_NAME
+#PRETTYNAME_NIGHTLY = '^LibreELEC-.*-([0-9]+\.[0-9]+\-.*-[0-9]{8}-[0-9a-z]{7})' % DISTRO_NAME
 
 class ChunkedHash():
     # Calculate hash for chunked data
@@ -79,11 +78,11 @@ class ReleaseFile():
     def __init__(self, args):
         self._json_file = JSON_FILE
 
-        self._indir = args.input.rstrip(os.path.sep)
-        self._url = args.url.rstrip('/')
+        self._indir = args.input.removesuffix(os.path.sep)
+        self._url = args.url.removesuffix('/')
 
         if args.output:
-            self._outdir = args.output.rstrip(os.path.sep)
+            self._outdir = args.output.removesuffix(os.path.sep)
         else:
             self._outdir = self._indir
 
