@@ -105,6 +105,28 @@ class ReleaseFile():
         self._regex_xydate_custom_short_sort = re.compile(r'([0-9]+)\.([0-9]+)-.*-([0-9]{8})-')
         self._regex_builds = re.compile(r'%s-([^-]*)-.*' % DISTRO_NAME)
 
+        # nightly image format: {distro}-{proj.device}-{train}-nightly-{date}-{githash}{-uboot}.img.gz
+        self._regex_nightly_image = re.compile(r'''
+            ^(\w+)          # Distro (alphanumerics)
+            -(\w+[.]\w+)    # Device (alphanumerics.alphanumerics)
+            -(\d+[.]\d+)    # Train (decimals.decimals)
+            -nightly-(\d+)  # Date (decimals)
+            -([0-9a-fA-F]+) # Git Hash (hexadecimals)
+            (\S*)           # Uboot name with leading '-' (non-whitespace)
+            \.img\.gz''', re.VERBOSE)
+
+        # nightly image format: {distro}-{proj.device}-{train}-nightly-{date}-{githash}{-uboot}.tar
+        self._regex_nightly_tarball = re.compile(r'''
+            ^(\w+)          # Distro (alphanumerics)
+            -(\w+[.]\w+)    # Device (alphanumerics.alphanumerics)
+            -(\d+[.]\d+)    # Train (decimals.decimals)
+            -nightly-(\d+)  # Date (decimals)
+            -([0-9a-fA-F]+) # Git Hash (hexadecimals)
+            (\S*)           # Uboot name with leading '-' (non-whitespace)
+            \.tar''', re.VERBOSE)
+
+        # TODO release regex
+
         self.display_name = {'A64.arm': 'Allwinner A64',
                              'AMLGX.arm': 'Amlogic GXBB/GXL/GXM/G12/SM1',
                              'Dragonboard.arm': 'Qualcomm Dragonboard',
@@ -260,81 +282,116 @@ class ReleaseFile():
         # img.gz files will be included in the output if there is a matching
         # img.gz for the tar file.
         #
-        files = []
-        images = []
+        list_of_files = []
+        releases = []
+        builds = []
         for (dirpath, dirnames, filenames) in os.walk(path):
             for f in filenames:
-                if f.startswith('%s-' % DISTRO_NAME):
-                    if f.endswith('.tar') and not f.endswith('-noobs.tar'):
-                        files.append(f)
-                    elif f.endswith('.img.gz'):
-                        images.append(f)
-            break
+                if f.startswith(f'{DISTRO_NAME}-'):
+                    if 'nightly' in f:
+                        if f.endswith('.tar') and not f.endswith('-noobs.tar'):
+                            try:
+                                parsed_fname = self._regex_nightly_tarball.search(f)
+                            except:
+                                print(f'Failed to parse filename: {f}')
+                                continue
+                        elif f.endswith('.img.gz'):
+                            try:
+                                parsed_fname = self._regex_nightly_image.search(f)
+                            except:
+                                print(f'Failed to parse filename: {f}')
+                                continue
+                    else:
+                    # TODO non-nightlies
+                        continue
 
-        # From files, identify all release trains (8.0, 8.0, 8.2, 9.0 etc.)
-        releases = []
-        for release in files:
-            train_major_minor = self.get_train_major_minor(release)
-            if train_major_minor:
-                releases.append(train_major_minor)
-            elif args.verbose:
-                print('IGNORED [Failed to match any train]: %s' % release)
+#                    fname_parsed = parsed_fname.group(0)
+                    fname_distro = parsed_fname.group(1)
+                    fname_device = parsed_fname.group(2)
+                    fname_train = parsed_fname.group(3)
+#                    fname_date = parsed_fname.group(4)
+#                    fname_githash = parsed_fname.group(5)
+                    fname_uboot = parsed_fname.group(6).removeprefix('-')
 
-        # Create a unique sorted list of release trains (8.0, 8.2, 9.0 etc.)
+                    distro_train = f'{fname_distro}-{fname_train}'
+                    if distro_train not in releases:
+                        if args.verbose:
+                            print(f'Adding to releases: {distro_train}')
+                        releases.append(distro_train)
+
+                    if fname_device not in builds:
+                        if args.verbose:
+                            print(f'Adding to builds: {fname_device}')
+                        builds.append(fname_device)
+
+                    list_of_files.append([f, distro_train, fname_device, fname_uboot, dirpath])
+                else:
+                    if args.verbose:
+                        print(f'Ignored file: {f}')
+                    continue
+
+        # Sort list of release trains (8.0, 8.2, 9.0 etc.)
         trains = []
 
-        for train in sorted(list(set(releases)), key=cmp_to_key(self.custom_sort_train)):
+        for train in sorted(releases, key=cmp_to_key(self.custom_sort_train)):
             trains.append(train)
+        if args.verbose:
+            print(trains)
 
-        print(trains)
-
-        # Create a unique sorted list of builds (eg. RPi2.arm, Generix.x86_64 etc.)
-        builds = []
-        for release in files:
-            if self._regex_builds.match(release):
-                builds.append(self._regex_builds.findall(release)[0])
-        builds = sorted(list(set(builds)))
-
-        print(builds)
-
-        # For each train, add or update each matching build (tar and img.gz)
+        # Add train data to json
         for train in trains:
             self.update_json[train] = {'url': url}
             self.update_json[train]['prettyname_regex'] = self._prettyname
             self.update_json[train]['project'] = {}
 
-            for build in builds:
-                releases = sorted([x for x in files if self.match_version(x, build, train)], key=cmp_to_key(self.custom_sort_release))
+        # Sort list of builds (eg. RPi2.arm, Generic.x86_64 etc.)
+        builds = sorted(builds)
+        if args.verbose:
+            print(builds)
 
+        for train in trains:     # ex: LibreELEC-10.0
+            for build in builds: # ex: RPi2.arm
                 entries = {}
-                for i, release in enumerate(releases):
-                    entry = {'file': {}}
+                base_previous_filename = ''
+                previous_entry = {}
+                for release_file in list_of_files: # each file found
+                    entry = {}
+                    entry_position = len(entries)
 
-                    # .tar
-                    (file_digest, file_size) = self.get_details(path, train, build, release)
-                    entry['file'] = {'name': release, 'sha256': file_digest, 'size': file_size}
+                    if train in release_file and build in release_file:
+                        base_filename = release_file[0].removesuffix('.tar')
+                        base_filename = base_filename.removesuffix('.img.gz')
 
-                    # .img.gz
-                    image = re.sub('\.tar$', '.img.gz', release)
-                    if image in images:
-                        (file_digest, file_size) = self.get_details(path, train, build, image)
-                    else:
-                        image = file_digest = file_size = ''
-                    entry['image'] = {'name': image, 'sha256': file_digest, 'size': file_size}
+                        (file_digest, file_size) = self.get_details(release_file[4], train, build, release_file[0])
 
-                    # u-boot board-specific .img.gz
-                    uboot = []
-                    for image in sorted([x for x in images if x.startswith(re.sub('\.tar$', '-', release))]):
-                        (file_digest, file_size) = self.get_details(path, train, build, image)
-                        uboot.append({'name': image, 'sha256': file_digest, 'size': file_size})
-                    # Add u-boot if we have any entries, remove if not
-                    if uboot != []:
-                        entry['uboot'] = uboot
+                        # *.tar
+                        if release_file[0].endswith('.tar'):
+                            entry['file'] = {'name': release_file[0], 'sha256': file_digest, 'size': file_size, 'subpath': release_file[4].removeprefix(f'{self._indir}/')}
+                        # *-{uboot}.img.gz
+                        elif release_file[3]:
+                            entry['uboot'] = {'name': release_file[0], 'sha256': file_digest, 'size': file_size, 'subpath': release_file[4].removeprefix(f'{self._indir}/')}
+                        # *.img.gz
+                        elif release_file[0].endswith('.img.gz'):
+                            entry['image'] = {'name': release_file[0], 'sha256': file_digest, 'size': file_size, 'subpath': release_file[4].removeprefix(f'{self._indir}/')}
 
-                    entries[i] = entry
+                        # if previous file goes to same base, combine entries and add
+                        if base_previous_filename == base_filename:
+                            entry.update(previous_entry)
+                            entries[entry_position] = entry
+                            previous_entry = {} # should never be 3 files with same base
+                        # otherwise just add the previous entry - this delays adding by one cycle
+                        elif previous_entry:
+                            entries[entry_position] = previous_entry
 
-                # Only add builds with releases
-                if len(entries) != 0:
+                        base_previous_filename = base_filename
+                        previous_entry = entry
+
+                # adding to entries was delayed one cycle, so add entry from final loop
+                if previous_entry:
+                    entries[entry_position] = previous_entry
+
+                # adds each file "grouping" as its own release
+                if len(entries) > 0:
                     if build in self.display_name:
                         self.update_json[train]['project'][build] = {'displayName': self.display_name[build], 'releases': entries}
                     else:
