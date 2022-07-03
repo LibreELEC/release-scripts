@@ -286,6 +286,10 @@ class ReleaseFile():
         releases = []
         builds = []
         for (dirpath, dirnames, filenames) in os.walk(path):
+            if 'archive' in dirpath or 'upload' in dirpath:
+                if args.verbose:
+                    print(f'Skipping directory: {dirpath}')
+                continue
             for f in filenames:
                 if f.startswith(f'{DISTRO_NAME}-'):
                     if 'nightly' in f:
