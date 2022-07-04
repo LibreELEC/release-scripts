@@ -111,8 +111,8 @@ class ReleaseFile():
             ^(\w+)          # Distro (alphanumerics)
             -(\w+[.]\w+)    # Device (alphanumerics.alphanumerics)
             -(\d+[.]\d+)    # Train (decimals.decimals)
-            -nightly-(\d+)  # Date (decimals)
-            -([0-9a-fA-F]+) # Git Hash (hexadecimals)
+            -nightly-\d+    # Date (decimals)
+            -[0-9a-fA-F]+   # Git Hash (hexadecimals)
             (\S*)           # Uboot name with leading '-' (non-whitespace)
             \.img\.gz''', re.VERBOSE)
 
@@ -121,12 +121,26 @@ class ReleaseFile():
             ^(\w+)          # Distro (alphanumerics)
             -(\w+[.]\w+)    # Device (alphanumerics.alphanumerics)
             -(\d+[.]\d+)    # Train (decimals.decimals)
-            -nightly-(\d+)  # Date (decimals)
-            -([0-9a-fA-F]+) # Git Hash (hexadecimals)
+            -nightly-\d+    # Date (decimals)
+            -[0-9a-fA-F]+   # Git Hash (hexadecimals)
             (\S*)           # Uboot name with leading '-' (non-whitespace)
             \.tar''', re.VERBOSE)
 
-        # TODO release regex
+        # release image format: {distro}-{proj.device}-{maj.min.bug}{-uboot}.img.gz
+        self._regex_release_image = re.compile(r'''
+            ^(\w+)              # Distro (alphanumerics)
+            -(\w+[.]\w+)        # Device (alphanumerics.alphanumerics)
+            -(\d+[.]\d+)[.]\d+  # Train (decimals.decimals)
+            (\S*)               # Uboot name with leading '-' (non-whitespace)
+            \.img\.gz''', re.VERBOSE)
+
+        # release tarball format: {distro}-{proj.device}-{maj.min.bug}.tar
+        self._regex_release_tarball = re.compile(r'''
+            ^(\w+)              # Distro (alphanumerics)
+            -(\w+[.]\w+)        # Device (alphanumerics.alphanumerics)
+            -(\d+[.]\d+)[.]\d+  # Train (decimals.decimals.decimals)
+            (\S*)               # Uboot name with leading '-' (non-whitespace)
+            \.tar''', re.VERBOSE)
 
         self.display_name = {'A64.arm': 'Allwinner A64',
                              'AMLGX.arm': 'Amlogic GXBB/GXL/GXM/G12/SM1',
@@ -298,30 +312,42 @@ class ReleaseFile():
                 continue
             for f in filenames:
                 if f.startswith(f'{DISTRO_NAME}-'):
-                    if 'nightly' in f:
-                        if f.endswith('.tar') and not f.endswith('-noobs.tar'):
+                    if f.endswith('.tar') and not f.endswith('-noobs.tar'):
+                        if 'nightly' in f:
                             try:
                                 parsed_fname = self._regex_nightly_tarball.search(f)
                             except:
                                 print(f'Failed to parse filename: {f}')
                                 continue
-                        elif f.endswith('.img.gz'):
+                        else:
+                            try:
+                                parsed_fname = self._regex_release_tarball.search(f)
+                            except:
+                                print(f'Failed to parse filename: {f}')
+                                continue
+                    elif f.endswith('.img.gz'):
+                        if 'nightly' in f:
                             try:
                                 parsed_fname = self._regex_nightly_image.search(f)
                             except:
                                 print(f'Failed to parse filename: {f}')
                                 continue
+                        else:
+                            try:
+                                parsed_fname = self._regex_release_image.search(f)
+                            except:
+                                print(f'Failed to parse filename: {f}')
+                                continue
                     else:
-                    # TODO non-nightlies
+                        if args.verbose:
+                            print(f'Ignored file: {f}')
                         continue
 
 #                    fname_parsed = parsed_fname.group(0)
                     fname_distro = parsed_fname.group(1)
                     fname_device = parsed_fname.group(2)
                     fname_train = parsed_fname.group(3)
-#                    fname_date = parsed_fname.group(4)
-#                    fname_githash = parsed_fname.group(5)
-                    fname_uboot = parsed_fname.group(6).removeprefix('-')
+                    fname_uboot = parsed_fname.group(4).removeprefix('-')
 
                     distro_train = f'{fname_distro}-{fname_train}'
                     if distro_train not in releases:
