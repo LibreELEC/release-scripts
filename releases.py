@@ -101,11 +101,6 @@ class ReleaseFile():
         if not os.path.exists(self._outdir):
             raise Exception('ERROR: %s is not a valid path' % self._outdir)
 
-        self._regex_xyz_custom_sort = re.compile(r'([0-9]+)\.([0-9]+)\.([0-9]+)')
-        self._regex_xydate_custom_sort = re.compile(r'([0-9]+)\.([0-9]+)-.*-([0-9]{14})-')
-        self._regex_xydate_custom_short_sort = re.compile(r'([0-9]+)\.([0-9]+)-.*-([0-9]{8})-')
-        self._regex_builds = re.compile(r'%s-([^-]*)-.*' % DISTRO_NAME)
-
         # nightly image format: {distro}-{proj.device}-{train}-nightly-{date}-{githash}{-uboot}.img.gz
         self._regex_nightly_image = re.compile(r'''
             ^(\w+)          # Distro (alphanumerics)
@@ -200,17 +195,6 @@ class ReleaseFile():
                 return '%s-%0.1f' % (DISTRO_NAME, item_maj_min)
         return None
 
-    def match_version(self, item, build, train):
-        train_items = train.split('-')
-
-        major_minor = train_items[1]
-
-        if item.startswith('%s-%s-' % (DISTRO_NAME, build)) and \
-           train == self.get_train_major_minor(item):
-           return True
-
-        return False
-
     def custom_sort_train(self, a, b):
         a_items = a.split('-')
         b_items = b.split('-')
@@ -224,26 +208,6 @@ class ReleaseFile():
           return -1
         elif (a_builder > b_builder):
           return +1
-
-    def custom_sort_release(self, a, b):
-        a_maj_min_patch = self._regex_xyz_custom_sort.search(a)
-        if not a_maj_min_patch:
-            a_maj_min_patch = self._regex_xydate_custom_sort.search(a)
-
-        if not a_maj_min_patch:
-            a_maj_min_patch = self._regex_xydate_custom_short_sort.search(a)
-
-        b_maj_min_patch = self._regex_xyz_custom_sort.search(b)
-        if not b_maj_min_patch:
-            b_maj_min_patch = self._regex_xydate_custom_sort.search(b)
-
-        if not b_maj_min_patch:
-            b_maj_min_patch = self._regex_xydate_custom_short_sort.search(b)
-
-        a_int = int('%04d%04d%014d' % (int(a_maj_min_patch.groups(0)[0]), int(a_maj_min_patch.groups(0)[1]), int(a_maj_min_patch.groups(0)[2])))
-        b_int = int('%04d%04d%014d' % (int(b_maj_min_patch.groups(0)[0]), int(b_maj_min_patch.groups(0)[1]), int(b_maj_min_patch.groups(0)[2])))
-
-        return (a_int - b_int)
 
     def get_details(self, path, train, build, file):
         key = '%s;%s;%s' % (train, build, file)
@@ -269,39 +233,14 @@ class ReleaseFile():
 
         self.WriteFile()
 
-    def UpdateCombinedFile(self):
-        self.ReadFile()
-
-        for (dirpath, dirnames, filenames) in os.walk(self._indir):
-            for project in dirnames:
-                self.UpdateFile(project)
-            break
-
-        self.WriteFile()
-
-    def UpdateProjectFile(self, project):
-        self.ReadFile()
-
-        self.UpdateFile(project)
-
-        self.WriteFile()
-
-    def UpdateFile(self, project=None):
-        if project:
-            path = os.path.join(self._indir, project)
-            url = '%s/%s/' % (self._url, project)
-        else:
-            path = self._indir
-            url = '%s/' % self._url
+    def UpdateFile(self):
+        path = self._indir
+        url = '%s/' % self._url
 
         # Walk top level source directory, selecting files for subsequent processing.
         #
         # We're only interested in 'LibreELEC-.*.tar' files, and not interested
         # in '.*-noobs.tar' files.
-        #
-        # img.gz files will be included in the output if there is a matching
-        # img.gz for the tar file.
-        #
         list_of_files = []
         releases = []
         builds = []
