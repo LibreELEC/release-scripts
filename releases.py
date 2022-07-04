@@ -11,6 +11,7 @@ import re
 import argparse
 import hashlib
 import json
+from datetime import datetime
 from functools import cmp_to_key
 from collections import OrderedDict
 
@@ -236,11 +237,16 @@ class ReleaseFile():
             print('Adding: %s in %s train' % (file, train))
             file_digest = ChunkedHash().calculate_sha256(os.path.join(path, file))
             file_size = str(os.path.getsize(os.path.join(path, file)))
+            file_timestamp = datetime.fromtimestamp(os.path.getmtime(os.path.join(path,file))).isoformat(sep=' ', timespec='seconds')
         else:
             file_digest = self.oldhash[key]['sha256']
             file_size = self.oldhash[key]['size']
+            try:
+                file_timestamp = self.oldhash[key]['timestamp']
+            except:
+                file_timestamp = datetime.fromtimestamp(os.path.getmtime(os.path.join(path,file))).isoformat(sep=' ', timespec='seconds')
 
-        return (file_digest, file_size)
+        return (file_digest, file_size, file_timestamp)
 
     def UpdateAll(self):
         self.ReadFile()
@@ -366,17 +372,17 @@ class ReleaseFile():
                         base_filename = release_file[0].removesuffix('.tar')
                         base_filename = base_filename.removesuffix('.img.gz')
 
-                        (file_digest, file_size) = self.get_details(release_file[4], train, build, release_file[0])
+                        (file_digest, file_size, file_timestamp) = self.get_details(release_file[4], train, build, release_file[0])
 
                         # *.tar
                         if release_file[0].endswith('.tar'):
-                            entry['file'] = {'name': release_file[0], 'sha256': file_digest, 'size': file_size, 'subpath': release_file[4].removeprefix(f'{self._indir}/')}
+                            entry['file'] = {'name': release_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': file_timestamp, 'subpath': release_file[4].removeprefix(f'{self._indir}/')}
                         # *-{uboot}.img.gz
                         elif release_file[3]:
-                            entry['uboot'] = {'name': release_file[0], 'sha256': file_digest, 'size': file_size, 'subpath': release_file[4].removeprefix(f'{self._indir}/')}
+                            entry['uboot'] = {'name': release_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': file_timestamp, 'subpath': release_file[4].removeprefix(f'{self._indir}/')}
                         # *.img.gz
                         elif release_file[0].endswith('.img.gz'):
-                            entry['image'] = {'name': release_file[0], 'sha256': file_digest, 'size': file_size, 'subpath': release_file[4].removeprefix(f'{self._indir}/')}
+                            entry['image'] = {'name': release_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': file_timestamp, 'subpath': release_file[4].removeprefix(f'{self._indir}/')}
 
                         # if previous file goes to same base, combine entries and add
                         if base_previous_filename == base_filename:
