@@ -46,8 +46,8 @@ VERSIONS = [
 
 JSON_FILE = 'releases.json'
 DISTRO_NAME = 'LibreELEC'
-PRETTYNAME = '^%s-.*-([0-9]+\.[0-9]+\.[0-9]+)' % DISTRO_NAME
-#PRETTYNAME_NIGHTLY = '^LibreELEC-.*-([0-9]+\.[0-9]+\-.*-[0-9]{8}-[0-9a-z]{7})' % DISTRO_NAME
+PRETTYNAME = f'^{DISTRO_NAME}-.*-([0-9]+\.[0-9]+\.[0-9]+)'
+#PRETTYNAME_NIGHTLY = f'^{DISTRO_NAME}-.*-([0-9]+\.[0-9]+\-.*-[0-9]{8}-[0-9a-z]{7})'
 
 class ChunkedHash():
     # Calculate hash for chunked data
@@ -96,10 +96,10 @@ class ReleaseFile():
             self._prettyname = PRETTYNAME
 
         if not os.path.exists(self._indir):
-            raise Exception('ERROR: %s is not a valid path' % self._indir)
+            raise Exception(f'ERROR: invalid path: {self._indir}')
 
         if not os.path.exists(self._outdir):
-            raise Exception('ERROR: %s is not a valid path' % self._outdir)
+            raise Exception(f'ERROR: invalid path: {self._outdir}')
 
         # nightly image format: {distro}-{proj.device}-{train}-nightly-{date}-{githash}{-uboot}.img.gz
         self._regex_nightly_image = re.compile(r'''
@@ -210,9 +210,9 @@ class ReleaseFile():
           return +1
 
     def get_details(self, path, train, build, file):
-        key = '%s;%s;%s' % (train, build, file)
+        key = f'{train};{build};{file}'
         if key not in self.oldhash:
-            print('Adding: %s in %s train' % (file, train))
+            print(f'Adding: {file} to {train} train')
             file_digest = ChunkedHash().calculate_sha256(os.path.join(path, file))
             file_size = str(os.path.getsize(os.path.join(path, file)))
             file_timestamp = datetime.fromtimestamp(os.path.getmtime(os.path.join(path,file))).isoformat(sep=' ', timespec='seconds')
@@ -228,14 +228,12 @@ class ReleaseFile():
 
     def UpdateAll(self):
         self.ReadFile()
-
         self.UpdateFile()
-
         self.WriteFile()
 
     def UpdateFile(self):
         path = self._indir
-        url = '%s/' % self._url
+        url = f'{self._url}/'
 
         # Walk top level source directory, selecting files for subsequent processing.
         #
@@ -383,15 +381,15 @@ class ReleaseFile():
                         for build in oldjson[train]['project']:
                             for release in oldjson[train]['project'][build]['releases']:
                                 r = oldjson[train]['project'][build]['releases'][release]['file']
-                                self.oldhash['%s;%s;%s' % (train, build, r['name'])] = {'sha256': r['sha256'], 'size': r['size']}
+                                self.oldhash[f'{train};{build};{r["name"]}'] = {'sha256': r['sha256'], 'size': r['size']}
                                 try:
                                     i = oldjson[train]['project'][build]['releases'][release]['image']
-                                    self.oldhash['%s;%s;%s' % (train, build, i['name'])] = {'sha256': i['sha256'], 'size': i['size']}
+                                    self.oldhash[f'{train};{build};{i["name"]}'] = {'sha256': i['sha256'], 'size': i['size']}
                                 except:
                                     pass
                                 try:
                                     for i in oldjson[train]['project'][build]['releases'][release]['uboot']:
-                                        self.oldhash['%s;%s;%s' % (train, build, i['name'])] = {'sha256': i['sha256'], 'size': i['size']}
+                                        self.oldhash[f'{train};{build};{i["name"]}'] = {'sha256': i['sha256'], 'size': i['size']}
                                 except:
                                     pass
             except:
@@ -412,24 +410,24 @@ _ = OrderedDict()
 for item in VERSIONS:
     _[item[0]] = {'adjust': item[1],
                   'minor': item[2],
-                  'regex': re.compile(r'-([0-9]+\.%s)[-.]' % item[2])}
+                  'regex': re.compile(fr'-([0-9]+\.{item[2]})[-.]')}
 VERSIONS = _
 
-parser = argparse.ArgumentParser(description='Update %s %s with available tar/img.gz files.' % (DISTRO_NAME, JSON_FILE), \
+parser = argparse.ArgumentParser(description=f'Update {DISTRO_NAME} {JSON_FILE} with available tar/img.gz files.', \
                                  formatter_class=lambda prog: argparse.HelpFormatter(prog,max_help_position=25,width=90))
 
 parser.add_argument('-i', '--input', metavar='DIRECTORY', required=True, \
-                    help='Directory to parsed (release files, and any existing %s). By default %s will be ' \
-                         'written into this directory. Required property.' % (JSON_FILE, JSON_FILE))
+                    help=f'Directory to parsed (release files, and any existing {JSON_FILE}). By default, {JSON_FILE} will be ' \
+                         'written into this directory. Required property.')
 
 parser.add_argument('-u', '--url', metavar='URL', required=True, \
-                    help='Base URL for %s. Required property.' % JSON_FILE)
+                    help=f'Base URL for {JSON_FILE}. Required property.')
 
 parser.add_argument('-o', '--output', metavar='DIRECTORY', required=False, \
-                    help='Optional directory into which %s will be written. Defaults to same directory as --input.' % JSON_FILE)
+                    help=f'Optional directory into which {JSON_FILE} will be written. Defaults to same directory as --input.')
 
 parser.add_argument('-p', '--prettyname', metavar='REGEX', required=False, \
-                    help='Optional prettyname regex, default is %s' % PRETTYNAME)
+                    help=f'Optional prettyname regex, default is {PRETTYNAME}')
 
 parser.add_argument('-v', '--verbose', action="store_true", help='Enable verbose output (ignored files etc.)')
 
