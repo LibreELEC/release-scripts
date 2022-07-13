@@ -71,7 +71,7 @@ class ChunkedHash():
     def calculate_sha256(fname):
         try:
             return ChunkedHash.hash_bytestr_iter(ChunkedHash.file_as_blockiter(open(fname, 'rb')), hashlib.sha256())
-        except:
+        except Exception:
             raise
             return ''
 
@@ -242,7 +242,7 @@ class ReleaseFile():
 
         # Walk top level source directory, selecting files for subsequent processing.
         #
-        # We're only interested in 'LibreELEC-.*.tar' files, and not '.*-noobs.tar' files.
+        # We're interested in 'LibreELEC-.*.(tar|img.gz)' files, but not '.*-noobs.tar' files.
         list_of_files = []
         releases = []
         builds = []
@@ -257,26 +257,26 @@ class ReleaseFile():
                         if 'nightly' in f:
                             try:
                                 parsed_fname = self._regex_nightly_tarball.search(f)
-                            except:
+                            except Exception:
                                 print(f'Failed to parse filename: {f}')
                                 continue
                         else:
                             try:
                                 parsed_fname = self._regex_release_tarball.search(f)
-                            except:
+                            except Exception:
                                 print(f'Failed to parse filename: {f}')
                                 continue
                     elif f.endswith('.img.gz'):
                         if 'nightly' in f:
                             try:
                                 parsed_fname = self._regex_nightly_image.search(f)
-                            except:
+                            except Exception:
                                 print(f'Failed to parse filename: {f}')
                                 continue
                         else:
                             try:
                                 parsed_fname = self._regex_release_image.search(f)
-                            except:
+                            except Exception:
                                 print(f'Failed to parse filename: {f}')
                                 continue
                     else:
