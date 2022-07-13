@@ -219,10 +219,7 @@ class ReleaseFile():
         else:
             file_digest = self.oldhash[key]['sha256']
             file_size = self.oldhash[key]['size']
-            try:
-                file_timestamp = self.oldhash[key]['timestamp']
-            except:
-                file_timestamp = datetime.fromtimestamp(os.path.getmtime(os.path.join(path,file))).isoformat(sep=' ', timespec='seconds')
+            file_timestamp = self.oldhash[key]['timestamp']
 
         return (file_digest, file_size, file_timestamp)
 
@@ -237,8 +234,7 @@ class ReleaseFile():
 
         # Walk top level source directory, selecting files for subsequent processing.
         #
-        # We're only interested in 'LibreELEC-.*.tar' files, and not interested
-        # in '.*-noobs.tar' files.
+        # We're only interested in 'LibreELEC-.*.tar' files, and not '.*-noobs.tar' files.
         list_of_files = []
         releases = []
         builds = []
@@ -377,22 +373,34 @@ class ReleaseFile():
             try:
                 with open(self._infile, 'r') as f:
                     oldjson = json.loads(f.read())
-                    for train in oldjson:
-                        for build in oldjson[train]['project']:
-                            for release in oldjson[train]['project'][build]['releases']:
-                                r = oldjson[train]['project'][build]['releases'][release]['file']
-                                self.oldhash[f'{train};{build};{r["name"]}'] = {'sha256': r['sha256'], 'size': r['size']}
-                                try:
-                                    i = oldjson[train]['project'][build]['releases'][release]['image']
-                                    self.oldhash[f'{train};{build};{i["name"]}'] = {'sha256': i['sha256'], 'size': i['size']}
-                                except:
-                                    pass
-                                try:
-                                    for i in oldjson[train]['project'][build]['releases'][release]['uboot']:
-                                        self.oldhash[f'{train};{build};{i["name"]}'] = {'sha256': i['sha256'], 'size': i['size']}
-                                except:
-                                    pass
-            except:
+                    if args.verbose:
+                        print(f'Read old json: {self._infile}')
+
+                for train in oldjson:
+                    for build in oldjson[train]['project']:
+                        for release in oldjson[train]['project'][build]['releases']:
+                            try:
+                                data = oldjson[train]['project'][build]['releases'][release]['file']
+                                if args.verbose:
+                                    print(f'Found old json entry for: {data["name"]}')
+                                self.oldhash[f'{train};{build};{data["name"]}'] = {'sha256': data['sha256'], 'size': data['size'], 'timestamp': data['timestamp']}
+                            except KeyError:
+                                pass
+                            try:
+                                data = oldjson[train]['project'][build]['releases'][release]['image']
+                                if args.verbose:
+                                    print(f'Found old json entry for: {data["name"]}')
+                                self.oldhash[f'{train};{build};{data["name"]}'] = {'sha256': data['sha256'], 'size': data['size'], 'timestamp': data['timestamp']}
+                            except KeyError:
+                                pass
+                            try:
+                                data = oldjson[train]['project'][build]['releases'][release]['uboot']
+                                if args.verbose:
+                                    print(f'Found old json entry for: {data["name"]}')
+                                self.oldhash[f'{train};{build};{data["name"]}'] = {'sha256': data['sha256'], 'size': data['size'], 'timestamp': data['timestamp']}
+                            except KeyError:
+                                pass
+            except Exception:
                 self.oldhash = {}
 
     # Write a new file
