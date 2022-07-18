@@ -213,7 +213,15 @@ class ReleaseFile():
         key = f'{train};{build};{file}'
         if key not in self.oldhash:
             print(f'Adding: {file} to {train} train')
-            file_digest = ChunkedHash().calculate_sha256(os.path.join(path, file))
+            # Use .sha256 file's checksum if present
+            if os.path.exists(os.path.join(path, f'{file}.sha256')):
+                if args.verbose:
+                    print(f'  Using sha256sum from: {file}.sha256')
+                with open(os.path.join(path, f'{file}.sha256'), 'r') as f:
+                    digest_contents = f.read()
+                file_digest = digest_contents.split(' ')[0]
+            else:
+                file_digest = ChunkedHash().calculate_sha256(os.path.join(path, file))
             file_size = str(os.path.getsize(os.path.join(path, file)))
             file_timestamp = datetime.fromtimestamp(os.path.getmtime(os.path.join(path,file))).isoformat(sep=' ', timespec='seconds')
         else:
