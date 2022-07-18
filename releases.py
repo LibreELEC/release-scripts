@@ -101,7 +101,7 @@ class ReleaseFile():
         if not os.path.exists(self._outdir):
             raise Exception(f'ERROR: invalid path: {self._outdir}')
 
-        # nightly image format: {distro}-{proj.device}-{train}-nightly-{date}-{githash}{-uboot}.img.gz
+        # nightly image format: {distro}-{proj.device}-{train}-nightly-date-githash{-uboot}.img.gz
         self._regex_nightly_image = re.compile(r'''
             ^(\w+)          # Distro (alphanumerics)
             -(\w+[.]\w+)    # Device (alphanumerics.alphanumerics)
@@ -111,7 +111,17 @@ class ReleaseFile():
             (\S*)           # Uboot name with leading '-' (non-whitespace)
             \.img\.gz''', re.VERBOSE)
 
-        # nightly image format: {distro}-{proj.device}-{train}-nightly-{date}-{githash}{-uboot}.tar
+        # nightly *-legacy image format: {distro}-{proj-legacy.device}-{train}-nightly-date-githash{-uboot}.img.gz
+        self._regex_nightly_legacy_image = re.compile(r'''
+            ^(\w+)              # Distro (alphanumerics)
+            -(\w+-legacy[.]\w+) # Device (alphanumerics-legacy.alphanumerics)
+            -(\d+[.]\d+)        # Train (decimals.decimals)
+            -nightly-\d+        # Date (decimals)
+            -[0-9a-fA-F]+       # Git Hash (hexadecimals)
+            (\S*)               # Uboot name with leading '-' (non-whitespace)
+            \.img\.gz''', re.VERBOSE)
+
+        # nightly tarball format: {distro}-{proj.device}-{train}-nightly-date-githash{-uboot}.tar
         self._regex_nightly_tarball = re.compile(r'''
             ^(\w+)          # Distro (alphanumerics)
             -(\w+[.]\w+)    # Device (alphanumerics.alphanumerics)
@@ -121,7 +131,17 @@ class ReleaseFile():
             (\S*)           # Uboot name with leading '-' (non-whitespace)
             \.tar''', re.VERBOSE)
 
-        # release image format: {distro}-{proj.device}-{maj.min.bug}{-uboot}.img.gz
+        # nightly *-legacy tarball format: {distro}-{proj-legacy.device}-{train}-nightly-date-githash{-uboot}.tar
+        self._regex_nightly_legacy_tarball = re.compile(r'''
+            ^(\w+)              # Distro (alphanumerics)
+            -(\w+-legacy[.]\w+) # Device (alphanumerics-legacy.alphanumerics)
+            -(\d+[.]\d+)        # Train (decimals.decimals)
+            -nightly-\d+        # Date (decimals)
+            -[0-9a-fA-F]+       # Git Hash (hexadecimals)
+            (\S*)               # Uboot name with leading '-' (non-whitespace)
+            \.tar''', re.VERBOSE)
+
+        # release image format: {distro}-{proj.device}-{maj.min}.bug{-uboot}.img.gz
         self._regex_release_image = re.compile(r'''
             ^(\w+)              # Distro (alphanumerics)
             -(\w+[.]\w+)        # Device (alphanumerics.alphanumerics)
@@ -129,10 +149,26 @@ class ReleaseFile():
             (\S*)               # Uboot name with leading '-' (non-whitespace)
             \.img\.gz''', re.VERBOSE)
 
-        # release tarball format: {distro}-{proj.device}-{maj.min.bug}.tar
+        # release *-legacy image format: {distro}-{proj.device}-{maj.min}.bug{-uboot}.img.gz
+        self._regex_release_legacy_image = re.compile(r'''
+            ^(\w+)              # Distro (alphanumerics)
+            -(\w+-legacy[.]\w+) # Device (alphanumerics-legacy.alphanumerics)
+            -(\d+[.]\d+)[.]\d+  # Train (decimals.decimals)
+            (\S*)               # Uboot name with leading '-' (non-whitespace)
+            \.img\.gz''', re.VERBOSE)
+
+        # release tarball format: {distro}-{proj.device}-{maj.min}.bug.tar
         self._regex_release_tarball = re.compile(r'''
             ^(\w+)              # Distro (alphanumerics)
             -(\w+[.]\w+)        # Device (alphanumerics.alphanumerics)
+            -(\d+[.]\d+)[.]\d+  # Train (decimals.decimals.decimals)
+            (\S*)               # Uboot name with leading '-' (non-whitespace)
+            \.tar''', re.VERBOSE)
+
+        # release *-legacy tarball format: {distro}-{proj.device}-{maj.min}.bug.tar
+        self._regex_release_legacy_tarball = re.compile(r'''
+            ^(\w+)              # Distro (alphanumerics)
+            -(\w+-legacy[.]\w+) # Device (alphanumerics-legacy.alphanumerics)
             -(\d+[.]\d+)[.]\d+  # Train (decimals.decimals.decimals)
             (\S*)               # Uboot name with leading '-' (non-whitespace)
             \.tar''', re.VERBOSE)
@@ -255,30 +291,58 @@ class ReleaseFile():
                 if f.startswith(f'{DISTRO_NAME}-'):
                     if f.endswith('.tar') and not f.endswith('-noobs.tar'):
                         if 'nightly' in f:
-                            try:
-                                parsed_fname = self._regex_nightly_tarball.search(f)
-                            except Exception:
-                                print(f'Failed to parse filename: {f}')
-                                continue
+                            if '-legacy' in f:
+                                try:
+                                    parsed_fname = self._regex_nightly_legacy_tarball.search(f)
+                                except Exception:
+                                    print(f'Failed to parse filename: {f}')
+                                    continue
+                            else:
+                                try:
+                                    parsed_fname = self._regex_nightly_tarball.search(f)
+                                except Exception:
+                                    print(f'Failed to parse filename: {f}')
+                                    continue
                         else:
-                            try:
-                                parsed_fname = self._regex_release_tarball.search(f)
-                            except Exception:
-                                print(f'Failed to parse filename: {f}')
-                                continue
+                            if '-legacy' in f:
+                                try:
+                                    parsed_fname = self._regex_release_legacy_tarball.search(f)
+                                except Exception:
+                                    print(f'Failed to parse filename: {f}')
+                                    continue
+                            else:
+                                try:
+                                    parsed_fname = self._regex_release_tarball.search(f)
+                                except Exception:
+                                    print(f'Failed to parse filename: {f}')
+                                    continue
                     elif f.endswith('.img.gz'):
                         if 'nightly' in f:
-                            try:
-                                parsed_fname = self._regex_nightly_image.search(f)
-                            except Exception:
-                                print(f'Failed to parse filename: {f}')
-                                continue
+                            if '-legacy' in f:
+                                try:
+                                    parsed_fname = self._regex_nightly_legacy_image.search(f)
+                                except Exception:
+                                    print(f'Failed to parse filename: {f}')
+                                    continue
+                            else:
+                                try:
+                                    parsed_fname = self._regex_nightly_image.search(f)
+                                except Exception:
+                                    print(f'Failed to parse filename: {f}')
+                                    continue
                         else:
-                            try:
-                                parsed_fname = self._regex_release_image.search(f)
-                            except Exception:
-                                print(f'Failed to parse filename: {f}')
-                                continue
+                            if '-legacy' in f:
+                                try:
+                                    parsed_fname = self.regex_release_legacy_image.search(f)
+                                except Exception:
+                                    print(f'Failed to parse filename: {f}')
+                                    continue
+                            else:
+                                try:
+                                    parsed_fname = self._regex_release_image.search(f)
+                                except Exception:
+                                    print(f'Failed to parse filename: {f}')
+                                    continue
                     else:
                         if args.verbose:
                             print(f'Ignored file: {f}')
