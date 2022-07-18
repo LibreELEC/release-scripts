@@ -11,7 +11,7 @@ import re
 import argparse
 import hashlib
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import cmp_to_key
 from collections import OrderedDict
 
@@ -44,6 +44,7 @@ VERSIONS = [
                ['stable',    0.00, '[0,2,4,6]'],
            ]
 
+DAYS_TO_KEEP_NIGHTLIES=10
 JSON_FILE = 'releases.json'
 DISTRO_NAME = 'LibreELEC'
 PRETTYNAME = f'^{DISTRO_NAME}-.*-([0-9]+\.[0-9]+\.[0-9]+)'
@@ -275,6 +276,7 @@ class ReleaseFile():
     def UpdateFile(self):
         path = self._indir
         url = f'{self._url}/'
+        nightly_retention = datetime.now() - timedelta(days=DAYS_TO_KEEP_NIGHTLIES)
 
         # Walk top level source directory, selecting files for subsequent processing.
         #
@@ -291,6 +293,10 @@ class ReleaseFile():
                 if f.startswith(f'{DISTRO_NAME}-'):
                     if f.endswith('.tar') and not f.endswith('-noobs.tar'):
                         if 'nightly' in f:
+                            if not args.all and datetime.fromtimestamp(os.path.getmtime(os.path.join(dirpath, f))) < nightly_retention:
+                                if args.verbose:
+                                    print(f'Old nightly: {f}')
+                                continue
                             if '-legacy' in f:
                                 try:
                                     parsed_fname = self._regex_nightly_legacy_tarball.search(f)
@@ -318,6 +324,10 @@ class ReleaseFile():
                                     continue
                     elif f.endswith('.img.gz'):
                         if 'nightly' in f:
+                            if not args.all and datetime.fromtimestamp(os.path.getmtime(os.path.join(dirpath, f))) < nightly_retention:
+                                if args.verbose:
+                                    print(f'Old nightly: {f}')
+                                continue
                             if '-legacy' in f:
                                 try:
                                     parsed_fname = self._regex_nightly_legacy_image.search(f)
@@ -510,6 +520,9 @@ parser.add_argument('-p', '--prettyname', metavar='REGEX', required=False, \
                     help=f'Optional prettyname regex, default is {PRETTYNAME}')
 
 parser.add_argument('-v', '--verbose', action="store_true", help='Enable verbose output (ignored files etc.)')
+
+parser.add_argument('-a', '--all', action="store_true", required=False, \
+                    help='Add all nightly tar/img.gz files without regard to rentention period.')
 
 args = parser.parse_args()
 
