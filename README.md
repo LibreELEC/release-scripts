@@ -1,31 +1,40 @@
 # Description 
-The scripts in the repository are used to generate the releases.json file used in the USB-SD-Creator and in the manual update feature present in LibreELEC 8.0+
+The scripts in the repository are used to generate the releases.json file used in the USB-SD-Creator and in the addon's update feature present in LibreELEC 10.0+.
 
-The script generates a json formatted output with the filenames, file sizes, and sha256 sums.
+The script generates a json formatted output with the filenames, file sizes, sha256 sums, modification timestamp, and the directory subpath the file resides in.
 
 For example
 ```
-{  
-   "LibreELEC-8.0":{  
-      "url":"http://releases.libreelec.tv/",
-      "project":{  
-         "WeTek_Hub.aarch64":{  
-            "displayName":"WeTek Hub",
-            "releases":{  
-               "0":{  
-                  "image":{  
-                     "sha256":"bcc1f74fa1deda0db8d873aefb9d154271698982d0503a6a3170ec0c2bc33a59",
-                     "name":"LibreELEC-WeTek_Hub.aarch64-7.90.005.img.gz",
-                     "size":"116989175"
-                  },
-                  "file":{  
-                     "sha256":"d82ead255190c30c43c3f6bc57962bf5f46863598fd67a31b0e2e5ecb375fbe7",
-                     "name":"LibreELEC-WeTek_Hub.aarch64-7.90.005.tar",
-                     "size":"128993280"
-                  }
-               },
+{
+  "LibreELEC-10.0": {
+    "prettyname_regex": "^LibreELEC-.*-([0-9]+\\.[0-9]+\\-.*-[0-9]{8}-[0-9a-z]{7})",
+    "project": {
+      "RPi2.arm": {
+        "displayName": "Raspberry Pi 2 and 3",
+        "releases": {
+          "0": {
+            "file": {
+              "name": "LibreELEC-RPi2.arm-10.0.2.tar",
+              "sha256": "3c4f6b848f4e5d700d4389fdd08f9a99cfc1a3c8791d9d803584e4197c69cb19",
+              "size": "129945600",
+              "subpath": "10.0/RPi",
+              "timestamp": "2022-03-05 18:17:34"
+            },
+            "image": {
+              "name": "LibreELEC-RPi2.arm-10.0.2.img.gz",
+              "sha256": "9befdc8f42a663e57d7e1e24230fa11354a25cf003ef352c9d3ec576919bea90",
+              "size": "126804594",
+              "subpath": "10.0/RPi",
+              "timestamp": "2022-03-05 18:17:59"
+            }
+          }
+        }
+      }
+    },
+    "url": "https://releases.libreelec.tv/"
+  },
 ```
-For the full output see, http://releases.libreelec.tv/releases.json
+For the full output see, https://releases.libreelec.tv/releases.json
 
 # How to run
 ```
