@@ -282,6 +282,7 @@ class ReleaseFile():
         #
         # We're interested in 'LibreELEC-.*.(tar|img.gz)' files, but not '.*-noobs.tar' files.
         list_of_files = []
+        list_of_filenames = []
         releases = []
         builds = []
         for (dirpath, dirnames, filenames) in os.walk(path):
@@ -376,6 +377,7 @@ class ReleaseFile():
                         builds.append(fname_device)
 
                     list_of_files.append([f, distro_train, fname_device, fname_uboot, dirpath])
+                    list_of_filenames.append(f)
                 else:
                     if args.verbose:
                         print(f'Ignored file: {f}')
@@ -403,13 +405,17 @@ class ReleaseFile():
         for train in trains:     # ex: LibreELEC-10.0
             for build in builds: # ex: RPi2.arm
                 entries = {}
-                base_previous_filename = ''
-                previous_entry = {}
-                for release_file in list_of_files: # each file found
+                for release_file in list(list_of_files): # copy so original may be modified
+
+                    # file may have been processed on a previous loop
+                    if release_file not in list_of_files:
+                        continue
+
                     entry = {}
                     entry_position = len(entries)
 
                     if train in release_file and build in release_file:
+
                         base_filename = release_file[0].removesuffix('.tar')
                         base_filename = base_filename.removesuffix('.img.gz')
 
@@ -418,28 +424,48 @@ class ReleaseFile():
                         # *.tar
                         if release_file[0].endswith('.tar'):
                             entry['file'] = {'name': release_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': file_timestamp, 'subpath': release_file[4].removeprefix(f'{self._indir}/')}
+                            list_of_files.remove(release_file)
+                            list_of_filenames.remove(release_file[0])
+                            # check for image files with same name so they may be added
+                            if f'{base_filename}.img.gz' in list_of_filenames:
+                                for image_file in list(list_of_files):
+                                    if f'{base_filename}.img.gz' == image_file[0]:
+                                        (file_digest, file_size, file_timestamp) = self.get_details(image_file[4], train, build, image_file[0])
+                                        entry['image'] = {'name': image_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': file_timestamp, 'subpath': image_file[4].removeprefix(f'{self._indir}/')}
+                                        list_of_files.remove(image_file)
+                                        list_of_filenames.remove(image_file[0])
                         # *-{uboot}.img.gz
                         elif release_file[3]:
-                            entry['uboot'] = {'name': release_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': file_timestamp, 'subpath': release_file[4].removeprefix(f'{self._indir}/')}
+                            uboot = []
+                            uboot.append({'name': release_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': file_timestamp, 'subpath': release_file[4].removeprefix(f'{self._indir}/')})
+                            list_of_files.remove(release_file)
+                            list_of_filenames.remove(release_file[0])
+                            # check for similar uboot releases
+                            for item in list(list_of_filenames):
+                                if item.startswith(base_filename.removesuffix(f'-{release_file[3]}')):
+                                    for image_file in list(list_of_files):
+                                        if image_file[0].startswith(base_filename.removesuffix(f'-{release_file[3]}')):
+                                            (file_digest, file_size, file_timestamp) = self.get_details(image_file[4], train, build, image_file[0])
+                                            uboot.append({'name': image_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': file_timestamp, 'subpath': image_file[4].removeprefix(f'{self._indir}/')})
+                                            list_of_files.remove(image_file)
+                                            list_of_filenames.remove(image_file[0])
+
+                            entry['uboot'] = uboot
                         # *.img.gz
                         elif release_file[0].endswith('.img.gz'):
                             entry['image'] = {'name': release_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': file_timestamp, 'subpath': release_file[4].removeprefix(f'{self._indir}/')}
+                            list_of_files.remove(release_file)
+                            list_of_filenames.remove(release_file[0])
+                            # check for tarball files with same name so they may be added
+                            if f'{base_filename}.tar' in list_of_filenames:
+                                for tarball_file in list(list_of_files):
+                                    if f'{base_filename}.tar' == tarball_file[0]:
+                                        (file_digest, file_size, file_timestamp) = self.get_details(tarball_file[4], train, build, tarball_file[0])
+                                        entry['file'] = {'name': tarball_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': file_timestamp, 'subpath': tarball_file[4].removeprefix(f'{self._indir}/')}
+                                        list_of_files.remove(tarball_file)
+                                        list_of_filenames.remove(tarball_file[0])
 
-                        # if previous file goes to same base, combine entries and add
-                        if base_previous_filename == base_filename:
-                            entry.update(previous_entry)
-                            entries[entry_position] = entry
-                            previous_entry = {} # should never be 3 files with same base
-                        # otherwise just add the previous entry - this delays adding by one cycle
-                        elif previous_entry:
-                            entries[entry_position] = previous_entry
-
-                        base_previous_filename = base_filename
-                        previous_entry = entry
-
-                # adding to entries was delayed one cycle, so add entry from final loop
-                if previous_entry:
-                    entries[entry_position] = previous_entry
+                        entries[entry_position] = entry
 
                 # adds each file "grouping" as its own release
                 if len(entries) > 0:
@@ -476,13 +502,14 @@ class ReleaseFile():
                             except KeyError:
                                 pass
                             try:
-                                data = oldjson[train]['project'][build]['releases'][release]['uboot']
-                                if args.verbose:
-                                    print(f'Found old json entry for: {data["name"]}')
-                                self.oldhash[f'{train};{build};{data["name"]}'] = {'sha256': data['sha256'], 'size': data['size'], 'timestamp': data['timestamp']}
+                                for data in oldjson[train]['project'][build]['releases'][release]['uboot']:
+                                    if args.verbose:
+                                        print(f'Found old json entry for: {data["name"]}')
+                                    self.oldhash[f'{train};{build};{data["name"]}'] = {'sha256': data['sha256'], 'size': data['size'], 'timestamp': data['timestamp']}
                             except KeyError:
                                 pass
-            except Exception:
+            except Exception as e:
+                print(f'WARNING: Failed to read old json: {self._infile}\n  {e}')
                 self.oldhash = {}
 
     # Write a new file
