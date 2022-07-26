@@ -434,6 +434,8 @@ class ReleaseFile():
                                         entry['image'] = {'name': image_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': file_timestamp, 'subpath': image_file[4].removeprefix(f'{self._indir}/')}
                                         list_of_files.remove(image_file)
                                         list_of_filenames.remove(image_file[0])
+#                            else:
+#                                entry['image'] = {'name': '', 'sha256': '', 'size': '', 'timestamp': '', 'subpath': ''}
                         # *-{uboot}.img.gz
                         elif release_file[3]:
                             uboot = []
@@ -464,6 +466,8 @@ class ReleaseFile():
                                         entry['file'] = {'name': tarball_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': file_timestamp, 'subpath': tarball_file[4].removeprefix(f'{self._indir}/')}
                                         list_of_files.remove(tarball_file)
                                         list_of_filenames.remove(tarball_file[0])
+#                            else:
+#                                entry['file'] = {'name': '', 'sha256': '', 'size': '', 'timestamp': '', 'subpath': ''}
 
                         entries[entry_position] = entry
 
