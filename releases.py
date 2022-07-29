@@ -147,6 +147,7 @@ class ReleaseFile():
                              'Dragonboard.arm': 'Qualcomm Dragonboard',
                              'FORMAT.any': 'Tools',
                              'Generic.x86_64': 'Generic AMD/Intel/NVIDIA (x86_64)',
+                             'Generic-legacy.x86_64': 'Generic AMD/Intel/NVIDIA on X11 (x86_64)',
                              'H3.arm': 'Allwinner H3',
                              'H5.arm': 'Allwinner H5',
                              'H6.arm': 'Allwinner H6',
