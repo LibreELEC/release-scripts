@@ -35,6 +35,10 @@ from collections import OrderedDict
 #   10.0.1     10.0
 #   10.1.001   10.2
 #
+# VERSIONS[0] is label;
+# [1] is adjustment to minor version number;
+# [2] is the minor version number that corresponds to label;
+# [3] (added near EOF) is regex to search version number to know which adjustment to apply
 VERSIONS = [
                ['pre-alpha', 0.20, '80',],
                ['alpha',     0.10, '90',],
@@ -187,13 +191,14 @@ class ReleaseFile():
     def __exit__(self, type, value, traceback):
         pass
 
+    # provide version number; returns version number adjusted to stable release train
     def get_train_major_minor(self, item):
         for version in VERSIONS:
             match = VERSIONS[version]['regex'].search(item)
             if match:
                 adjust = VERSIONS[version]['adjust']
-                item_maj_min = float(match.groups(0)[0]) + adjust
-                return '%s-%0.1f' % (DISTRO_NAME, item_maj_min)
+                item_maj_min = float(match.group(0)) + adjust
+                return f'{item_maj_min:.1f}'
         return None
 
     def custom_sort_train(self, a, b):
@@ -305,7 +310,7 @@ class ReleaseFile():
                     fname_train = parsed_fname.group(3)
                     fname_uboot = parsed_fname.group(4).removeprefix('-')
 
-                    distro_train = f'{fname_distro}-{fname_train}'
+                    distro_train = f'{fname_distro}-{self.get_train_major_minor(fname_train)}'
                     if distro_train not in releases:
                         if args.verbose:
                             print(f'Adding to releases: {distro_train}')
@@ -326,7 +331,7 @@ class ReleaseFile():
         # Sort list of release trains (8.0, 8.2, 9.0 etc.)
         trains = []
 
-        for train in sorted(releases, key=cmp_to_key(self.custom_sort_train)):
+        for train in sorted(releases):
             trains.append(train)
         if args.verbose:
             print(trains)
@@ -471,8 +476,9 @@ _ = OrderedDict()
 for item in VERSIONS:
     _[item[0]] = {'adjust': item[1],
                   'minor': item[2],
-                  'regex': re.compile(fr'-([0-9]+\.{item[2]})[-.]')}
+                  'regex': re.compile(fr'([0-9]+\.{item[2]})')}
 VERSIONS = _
+
 
 parser = argparse.ArgumentParser(description=f'Update {DISTRO_NAME} {JSON_FILE} with available tar/img.gz files.', \
                                  formatter_class=lambda prog: argparse.HelpFormatter(prog,max_help_position=25,width=90))
