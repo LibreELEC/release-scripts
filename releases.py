@@ -201,20 +201,6 @@ class ReleaseFile():
                 return f'{item_maj_min:.1f}'
         return None
 
-    def custom_sort_train(self, a, b):
-        a_items = a.split('-')
-        b_items = b.split('-')
-
-        a_builder = a_items[0]
-        b_builder = b_items[0]
-
-        if (a_builder == b_builder):
-          return (float(a_items[1]) - float(b_items[1]))
-        elif (a_builder < b_builder):
-          return -1
-        elif (a_builder > b_builder):
-          return +1
-
     def get_details(self, path, train, build, file):
         key = f'{train};{build};{file}'
         if key not in self.oldhash:
