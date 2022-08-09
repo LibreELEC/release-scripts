@@ -11,7 +11,7 @@ import re
 import argparse
 import hashlib
 import json
-from datetime import datetime, timedelta
+from datetime import datetime
 from functools import cmp_to_key
 from collections import OrderedDict
 
@@ -48,7 +48,7 @@ VERSIONS = [
                ['stable',    0.00, '[0,2,4,6]'],
            ]
 
-DAYS_TO_KEEP_NIGHTLIES=10
+BUILDS_PER_DEVICE=10
 JSON_FILE = 'releases.json'
 DISTRO_NAME = 'LibreELEC'
 PRETTYNAME = f'^{DISTRO_NAME}-.*-([0-9]+\.[0-9]+\.[0-9]+)'
@@ -106,23 +106,23 @@ class ReleaseFile():
         if not os.path.exists(self._outdir):
             raise Exception(f'ERROR: invalid path: {self._outdir}')
 
-        # nightly image format: {distro}-{proj.device}-{train}-nightly-date-githash{-uboot}.img.gz
+        # nightly image format: {distro}-{proj.device}-{train}-nightly-{date}-githash{-uboot}.img.gz
         self._regex_nightly_image = re.compile(r'''
             ^(\w+)                   # Distro (alphanumerics)
             -([0-9a-zA-Z_-]+[.]\w+)  # Device (alphanumerics+'-'.alphanumerics)
             -(\d+[.]\d+)             # Train (decimals.decimals)
             -nightly-\d+             # Date (decimals)
-            -[0-9a-fA-F]+            # Git Hash (hexadecimals)
+            -([0-9a-fA-F]+)          # Git Hash (hexadecimals)
             (\S*)                    # Uboot name with leading '-' (non-whitespace)
             \.img\.gz''', re.VERBOSE)
 
-        # nightly tarball format: {distro}-{proj.device}-{train}-nightly-date-githash{-uboot}.tar
+        # nightly tarball format: {distro}-{proj.device}-{train}-nightly-{date}-githash{-uboot}.tar
         self._regex_nightly_tarball = re.compile(r'''
             ^(\w+)                   # Distro (alphanumerics)
             -([0-9a-zA-Z_-]+[.]\w+)  # Device (alphanumerics.alphanumerics)
             -(\d+[.]\d+)             # Train (decimals.decimals)
             -nightly-\d+             # Date (decimals)
-            -[0-9a-fA-F]+            # Git Hash (hexadecimals)
+            -([0-9a-fA-F]+)          # Git Hash (hexadecimals)
             (\S*)                    # Uboot name with leading '-' (non-whitespace)
             \.tar''', re.VERBOSE)
 
@@ -136,10 +136,10 @@ class ReleaseFile():
 
         # release tarball format: {distro}-{proj.device}-{maj.min}.bug.tar
         self._regex_release_tarball = re.compile(r'''
-            ^(\w+)              # Distro (alphanumerics)
-            -([0-9a-zA-Z_-]+[.]\w+)        # Device (alphanumerics+'-'.alphanumerics)
-            -(\d+[.]\d+)[.]\d+  # Train (decimals.decimals.decimals)
-            (\S*)               # Uboot name with leading '-' (non-whitespace)
+            ^(\w+)                   # Distro (alphanumerics)
+            -([0-9a-zA-Z_-]+[.]\w+)  # Device (alphanumerics+'-'.alphanumerics)
+            -(\d+[.]\d+)[.]\d+       # Train (decimals.decimals.decimals)
+            (\S*)                    # Uboot name with leading '-' (non-whitespace)
             \.tar''', re.VERBOSE)
 
         self.display_name = {'A64.arm': 'Allwinner A64',
@@ -232,7 +232,6 @@ class ReleaseFile():
     def UpdateFile(self):
         path = self._indir
         url = f'{self._url}/'
-        nightly_retention = datetime.now() - timedelta(days=DAYS_TO_KEEP_NIGHTLIES)
 
         # Walk top level source directory, selecting files for subsequent processing.
         #
@@ -251,10 +250,6 @@ class ReleaseFile():
                     if f.endswith('.tar') and not f.endswith('-noobs.tar'):
                         # nightly tarballs
                         if 'nightly' in f:
-                            if not args.all and datetime.fromtimestamp(os.path.getmtime(os.path.join(dirpath, f))) < nightly_retention:
-                                if args.verbose:
-                                    print(f'Old nightly: {f}')
-                                continue
                             try:
                                 parsed_fname = self._regex_nightly_tarball.search(f)
                             except Exception:
@@ -270,10 +265,6 @@ class ReleaseFile():
                     elif f.endswith('.img.gz'):
                         # nightly images
                         if 'nightly' in f:
-                            if not args.all and datetime.fromtimestamp(os.path.getmtime(os.path.join(dirpath, f))) < nightly_retention:
-                                if args.verbose:
-                                    print(f'Old nightly: {f}')
-                                continue
                             try:
                                 parsed_fname = self._regex_nightly_image.search(f)
                             except Exception:
@@ -295,7 +286,12 @@ class ReleaseFile():
                     fname_distro = parsed_fname.group(1)
                     fname_device = parsed_fname.group(2)
                     fname_train = parsed_fname.group(3)
-                    fname_uboot = parsed_fname.group(4).removeprefix('-')
+                    if 'nightly' in f:
+                        fname_githash = parsed_fname.group(4)
+                        fname_uboot = parsed_fname.group(5).removeprefix('-')
+                    else:
+                        fname_githash = None
+                        fname_uboot = parsed_fname.group(4).removeprefix('-')
 
                     distro_train = f'{fname_distro}-{self.get_train_major_minor(fname_train)}'
                     if distro_train not in releases:
@@ -308,7 +304,7 @@ class ReleaseFile():
                             print(f'Adding to builds: {fname_device}')
                         builds.append(fname_device)
 
-                    list_of_files.append([f, distro_train, fname_device, fname_uboot, dirpath])
+                    list_of_files.append([f, distro_train, fname_device, fname_githash, fname_uboot, dirpath])
                     list_of_filenames.append(f)
                 else:
                     if args.verbose:
@@ -323,25 +319,79 @@ class ReleaseFile():
         if args.verbose:
             print(trains)
 
+        # Sort list of builds (eg. RPi2.arm, Generic.x86_64 etc.)
+        builds = sorted(builds)
+        if args.verbose:
+            print(builds)
+
+        # make a dictionary where 'train;build' = [githashes of builds to add to json]
+        nightly_githashes = {}
+
+        for train in trains:     # ex: LibreELEC-10.0
+            for build in builds: # ex: RPi2.arm
+                for release_file in list_of_files:
+                    # process one train and build at a time, and only nightlies
+                    if train in release_file and build in release_file and 'nightly' in release_file[0]:
+
+                        file_timestamp = datetime.fromtimestamp(os.path.getmtime(os.path.join(release_file[5],release_file[0]))).isoformat(sep=' ', timespec='seconds')
+                        file_githash = release_file[3]
+                        continue_loop = False
+
+                        # add githash and timestamp to nightly_githashes if key doesn't exist
+                        if f'{train};{build}' not in nightly_githashes:
+                            nightly_githashes[f'{train};{build}'] = [f'{file_timestamp};{file_githash}']
+                            continue
+
+                        # skip if githash already present
+                        for data in nightly_githashes[f'{train};{build}']:
+                            if file_githash == data.split(';')[1]:
+                                continue_loop = True
+                                break
+                        if continue_loop:
+                            continue
+
+                        # add if less than desired number of files per device
+                        if len(nightly_githashes[f'{train};{build}']) < BUILDS_PER_DEVICE:
+                            nightly_githashes[f'{train};{build}'].append(f'{file_timestamp};{file_githash}')
+                            nightly_githashes[f'{train};{build}'] = sorted(nightly_githashes[f'{train};{build}'])
+                        # compare current githash to all those currently stored to see if current is newer
+                        else:
+                            compared_timestamp = nightly_githashes[f'{train};{build}'][0].split(';')[0]
+
+                            if file_timestamp > compared_timestamp:
+                                del nightly_githashes[f'{train};{build}'][0]
+                                nightly_githashes[f'{train};{build}'].append(f'{file_timestamp};{file_githash}')
+                                nightly_githashes[f'{train};{build}'] = sorted(nightly_githashes[f'{train};{build}'])
+
+                # strip timestamps from nightly_githashes for that device
+                try:
+                    for idx,data in enumerate(nightly_githashes[f'{train};{build}']):
+                        nightly_githashes[f'{train};{build}'][idx] = data.split(';')[1]
+                except KeyError:
+                    pass
+
         # Add train data to json
         for train in trains:
             self.update_json[train] = {'url': url}
             self.update_json[train]['prettyname_regex'] = self._prettyname
             self.update_json[train]['project'] = {}
 
-        # Sort list of builds (eg. RPi2.arm, Generic.x86_64 etc.)
-        builds = sorted(builds)
-        if args.verbose:
-            print(builds)
-
         for train in trains:     # ex: LibreELEC-10.0
             for build in builds: # ex: RPi2.arm
                 entries = {}
+
                 for release_file in list(list_of_files): # copy so original may be modified
 
                     # file may have been processed on a previous loop
                     if release_file not in list_of_files:
                         continue
+
+                    # file is a nightly without a blessed githash
+                    try:
+                        if 'nightly' in release_file[0] and release_file[3] not in nightly_githashes[f'{train};{build}']:
+                            continue
+                    except KeyError:
+                        pass
 
                     entry = {}
                     entry_position = len(entries)
@@ -351,51 +401,51 @@ class ReleaseFile():
                         base_filename = release_file[0].removesuffix('.tar')
                         base_filename = base_filename.removesuffix('.img.gz')
 
-                        (file_digest, file_size, file_timestamp) = self.get_details(release_file[4], train, build, release_file[0])
+                        (file_digest, file_size, file_timestamp) = self.get_details(release_file[5], train, build, release_file[0])
 
                         # *.tar
                         if release_file[0].endswith('.tar'):
-                            entry['file'] = {'name': release_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': file_timestamp, 'subpath': release_file[4].removeprefix(f'{self._indir}/')}
+                            entry['file'] = {'name': release_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': file_timestamp, 'subpath': release_file[5].removeprefix(f'{self._indir}/')}
                             list_of_files.remove(release_file)
                             list_of_filenames.remove(release_file[0])
                             # check for image files with same name so they may be added
                             if f'{base_filename}.img.gz' in list_of_filenames:
                                 for image_file in list(list_of_files):
                                     if f'{base_filename}.img.gz' == image_file[0]:
-                                        (file_digest, file_size, file_timestamp) = self.get_details(image_file[4], train, build, image_file[0])
-                                        entry['image'] = {'name': image_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': file_timestamp, 'subpath': image_file[4].removeprefix(f'{self._indir}/')}
+                                        (file_digest, file_size, file_timestamp) = self.get_details(image_file[5], train, build, image_file[0])
+                                        entry['image'] = {'name': image_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': file_timestamp, 'subpath': image_file[5].removeprefix(f'{self._indir}/')}
                                         list_of_files.remove(image_file)
                                         list_of_filenames.remove(image_file[0])
 #                            else:
 #                                entry['image'] = {'name': '', 'sha256': '', 'size': '', 'timestamp': '', 'subpath': ''}
                         # *-{uboot}.img.gz
-                        elif release_file[3]:
+                        elif release_file[4]:
                             uboot = []
-                            uboot.append({'name': release_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': file_timestamp, 'subpath': release_file[4].removeprefix(f'{self._indir}/')})
+                            uboot.append({'name': release_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': file_timestamp, 'subpath': release_file[5].removeprefix(f'{self._indir}/')})
                             list_of_files.remove(release_file)
                             list_of_filenames.remove(release_file[0])
                             # check for similar uboot releases
                             for item in list(list_of_filenames):
-                                if item.startswith(base_filename.removesuffix(f'-{release_file[3]}')):
+                                if item.startswith(base_filename.removesuffix(f'-{release_file[4]}')):
                                     for image_file in list(list_of_files):
-                                        if image_file[0].startswith(base_filename.removesuffix(f'-{release_file[3]}')):
-                                            (file_digest, file_size, file_timestamp) = self.get_details(image_file[4], train, build, image_file[0])
-                                            uboot.append({'name': image_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': file_timestamp, 'subpath': image_file[4].removeprefix(f'{self._indir}/')})
+                                        if image_file[0].startswith(base_filename.removesuffix(f'-{release_file[4]}')):
+                                            (file_digest, file_size, file_timestamp) = self.get_details(image_file[5], train, build, image_file[0])
+                                            uboot.append({'name': image_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': file_timestamp, 'subpath': image_file[5].removeprefix(f'{self._indir}/')})
                                             list_of_files.remove(image_file)
                                             list_of_filenames.remove(image_file[0])
 
                             entry['uboot'] = uboot
                         # *.img.gz
                         elif release_file[0].endswith('.img.gz'):
-                            entry['image'] = {'name': release_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': file_timestamp, 'subpath': release_file[4].removeprefix(f'{self._indir}/')}
+                            entry['image'] = {'name': release_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': file_timestamp, 'subpath': release_file[5].removeprefix(f'{self._indir}/')}
                             list_of_files.remove(release_file)
                             list_of_filenames.remove(release_file[0])
                             # check for tarball files with same name so they may be added
                             if f'{base_filename}.tar' in list_of_filenames:
                                 for tarball_file in list(list_of_files):
                                     if f'{base_filename}.tar' == tarball_file[0]:
-                                        (file_digest, file_size, file_timestamp) = self.get_details(tarball_file[4], train, build, tarball_file[0])
-                                        entry['file'] = {'name': tarball_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': file_timestamp, 'subpath': tarball_file[4].removeprefix(f'{self._indir}/')}
+                                        (file_digest, file_size, file_timestamp) = self.get_details(tarball_file[5], train, build, tarball_file[0])
+                                        entry['file'] = {'name': tarball_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': file_timestamp, 'subpath': tarball_file[5].removeprefix(f'{self._indir}/')}
                                         list_of_files.remove(tarball_file)
                                         list_of_filenames.remove(tarball_file[0])
 #                            else:
@@ -484,9 +534,6 @@ parser.add_argument('-p', '--prettyname', metavar='REGEX', required=False, \
                     help=f'Optional prettyname regex, default is {PRETTYNAME}')
 
 parser.add_argument('-v', '--verbose', action="store_true", help='Enable verbose output (ignored files etc.)')
-
-parser.add_argument('-a', '--all', action="store_true", required=False, \
-                    help='Add all nightly tar/img.gz files without regard to rentention period.')
 
 args = parser.parse_args()
 
