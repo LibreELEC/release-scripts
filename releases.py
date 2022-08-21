@@ -216,13 +216,11 @@ class ReleaseFile():
             else:
                 file_digest = ChunkedHash().calculate_sha256(os.path.join(path, file))
             file_size = str(os.path.getsize(os.path.join(path, file)))
-            file_timestamp = datetime.fromtimestamp(os.path.getmtime(os.path.join(path,file))).isoformat(sep=' ', timespec='seconds')
         else:
             file_digest = self.oldhash[key]['sha256']
             file_size = self.oldhash[key]['size']
-            file_timestamp = self.oldhash[key]['timestamp']
 
-        return (file_digest, file_size, file_timestamp)
+        return (file_digest, file_size)
 
     def UpdateAll(self):
         self.ReadFile()
@@ -292,6 +290,7 @@ class ReleaseFile():
                     else:
                         fname_githash = None
                         fname_uboot = parsed_fname.group(4).removeprefix('-')
+                    fname_timestamp = datetime.fromtimestamp(os.path.getmtime(os.path.join(dirpath,f))).isoformat(sep=' ', timespec='seconds')
 
                     distro_train = f'{fname_distro}-{self.get_train_major_minor(fname_train)}'
                     if distro_train not in releases:
@@ -304,7 +303,7 @@ class ReleaseFile():
                             print(f'Adding to builds: {fname_device}')
                         builds.append(fname_device)
 
-                    list_of_files.append([f, distro_train, fname_device, fname_githash, fname_uboot, dirpath])
+                    list_of_files.append([f, distro_train, fname_device, fname_githash, fname_uboot, dirpath, fname_timestamp])
                     list_of_filenames.append(f)
                 else:
                     if args.verbose:
@@ -333,8 +332,8 @@ class ReleaseFile():
                     # process one train and build at a time, and only nightlies
                     if train in release_file and build in release_file and 'nightly' in release_file[0]:
 
-                        file_timestamp = datetime.fromtimestamp(os.path.getmtime(os.path.join(release_file[5],release_file[0]))).isoformat(sep=' ', timespec='seconds')
                         file_githash = release_file[3]
+                        file_timestamp = release_file[6]
                         continue_loop = False
 
                         # add githash and timestamp to nightly_githashes if key doesn't exist
@@ -401,19 +400,19 @@ class ReleaseFile():
                         base_filename = release_file[0].removesuffix('.tar')
                         base_filename = base_filename.removesuffix('.img.gz')
 
-                        (file_digest, file_size, file_timestamp) = self.get_details(release_file[5], train, build, release_file[0])
+                        (file_digest, file_size) = self.get_details(release_file[5], train, build, release_file[0])
 
                         # *.tar
                         if release_file[0].endswith('.tar'):
-                            entry['file'] = {'name': release_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': file_timestamp, 'subpath': release_file[5].removeprefix(f'{self._indir}/')}
+                            entry['file'] = {'name': release_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': release_file[6], 'subpath': release_file[5].removeprefix(f'{self._indir}/')}
                             list_of_files.remove(release_file)
                             list_of_filenames.remove(release_file[0])
                             # check for image files with same name so they may be added
                             if f'{base_filename}.img.gz' in list_of_filenames:
                                 for image_file in list(list_of_files):
                                     if f'{base_filename}.img.gz' == image_file[0]:
-                                        (file_digest, file_size, file_timestamp) = self.get_details(image_file[5], train, build, image_file[0])
-                                        entry['image'] = {'name': image_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': file_timestamp, 'subpath': image_file[5].removeprefix(f'{self._indir}/')}
+                                        (file_digest, file_size) = self.get_details(image_file[5], train, build, image_file[0])
+                                        entry['image'] = {'name': image_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': image_file[6], 'subpath': image_file[5].removeprefix(f'{self._indir}/')}
                                         list_of_files.remove(image_file)
                                         list_of_filenames.remove(image_file[0])
 #                            else:
@@ -421,7 +420,7 @@ class ReleaseFile():
                         # *-{uboot}.img.gz
                         elif release_file[4]:
                             uboot = []
-                            uboot.append({'name': release_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': file_timestamp, 'subpath': release_file[5].removeprefix(f'{self._indir}/')})
+                            uboot.append({'name': release_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': release_file[6], 'subpath': release_file[5].removeprefix(f'{self._indir}/')})
                             list_of_files.remove(release_file)
                             list_of_filenames.remove(release_file[0])
                             # check for similar uboot releases
@@ -429,23 +428,23 @@ class ReleaseFile():
                                 if item.startswith(base_filename.removesuffix(f'-{release_file[4]}')):
                                     for image_file in list(list_of_files):
                                         if image_file[0].startswith(base_filename.removesuffix(f'-{release_file[4]}')):
-                                            (file_digest, file_size, file_timestamp) = self.get_details(image_file[5], train, build, image_file[0])
-                                            uboot.append({'name': image_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': file_timestamp, 'subpath': image_file[5].removeprefix(f'{self._indir}/')})
+                                            (file_digest, file_size) = self.get_details(image_file[5], train, build, image_file[0])
+                                            uboot.append({'name': image_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': image_file[6], 'subpath': image_file[5].removeprefix(f'{self._indir}/')})
                                             list_of_files.remove(image_file)
                                             list_of_filenames.remove(image_file[0])
 
                             entry['uboot'] = uboot
                         # *.img.gz
                         elif release_file[0].endswith('.img.gz'):
-                            entry['image'] = {'name': release_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': file_timestamp, 'subpath': release_file[5].removeprefix(f'{self._indir}/')}
+                            entry['image'] = {'name': release_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': release_file[6], 'subpath': release_file[5].removeprefix(f'{self._indir}/')}
                             list_of_files.remove(release_file)
                             list_of_filenames.remove(release_file[0])
                             # check for tarball files with same name so they may be added
                             if f'{base_filename}.tar' in list_of_filenames:
                                 for tarball_file in list(list_of_files):
                                     if f'{base_filename}.tar' == tarball_file[0]:
-                                        (file_digest, file_size, file_timestamp) = self.get_details(tarball_file[5], train, build, tarball_file[0])
-                                        entry['file'] = {'name': tarball_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': file_timestamp, 'subpath': tarball_file[5].removeprefix(f'{self._indir}/')}
+                                        (file_digest, file_size) = self.get_details(tarball_file[5], train, build, tarball_file[0])
+                                        entry['file'] = {'name': tarball_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': tarball_file[6], 'subpath': tarball_file[5].removeprefix(f'{self._indir}/')}
                                         list_of_files.remove(tarball_file)
                                         list_of_filenames.remove(tarball_file[0])
 #                            else:
