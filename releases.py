@@ -3,12 +3,15 @@
 # SPDX-License-Identifier: GPL-2.0
 # Copyright (C) 2016-present Team LibreELEC (https://libreelec.tv)
 
+# requires python >= 3.9
+
 import os
 import sys
 import re
 import argparse
 import hashlib
 import json
+from datetime import datetime
 from functools import cmp_to_key
 from collections import OrderedDict
 
@@ -32,6 +35,10 @@ from collections import OrderedDict
 #   10.0.1     10.0
 #   10.1.001   10.2
 #
+# VERSIONS[0] is label;
+# [1] is adjustment to minor version number;
+# [2] is the minor version number that corresponds to label;
+# [3] (added near EOF) is regex to search version number to know which adjustment to apply
 VERSIONS = [
                ['pre-alpha', 0.20, '80',],
                ['alpha',     0.10, '90',],
@@ -41,13 +48,11 @@ VERSIONS = [
                ['stable',    0.00, '[0,2,4,6]'],
            ]
 
+BUILDS_PER_DEVICE=10
 JSON_FILE = 'releases.json'
-
 DISTRO_NAME = 'LibreELEC'
-
-PRETTYNAME = '^%s-.*-([0-9]+\.[0-9]+\.[0-9]+)' % DISTRO_NAME
-
-PRETTYNAME_NIGHTLY = '^LibreELEC-.*-([0-9]+\.[0-9]+\-.*-[0-9]{8}-[0-9a-z]{7})' % DISTRO_NAME
+PRETTYNAME = f'^{DISTRO_NAME}-.*-([0-9]+\.[0-9]+\.[0-9]+)'
+#PRETTYNAME_NIGHTLY = f'^{DISTRO_NAME}-.*-([0-9]+\.[0-9]+\-.*-[0-9]{8}-[0-9a-z]{7})'
 
 class ChunkedHash():
     # Calculate hash for chunked data
@@ -71,7 +76,7 @@ class ChunkedHash():
     def calculate_sha256(fname):
         try:
             return ChunkedHash.hash_bytestr_iter(ChunkedHash.file_as_blockiter(open(fname, 'rb')), hashlib.sha256())
-        except:
+        except Exception:
             raise
             return ''
 
@@ -79,11 +84,11 @@ class ReleaseFile():
     def __init__(self, args):
         self._json_file = JSON_FILE
 
-        self._indir = args.input.rstrip(os.path.sep)
-        self._url = args.url.rstrip('/')
+        self._indir = args.input.removesuffix(os.path.sep)
+        self._url = args.url.removesuffix('/')
 
         if args.output:
-            self._outdir = args.output.rstrip(os.path.sep)
+            self._outdir = args.output.removesuffix(os.path.sep)
         else:
             self._outdir = self._indir
 
@@ -96,21 +101,53 @@ class ReleaseFile():
             self._prettyname = PRETTYNAME
 
         if not os.path.exists(self._indir):
-            raise Exception('ERROR: %s is not a valid path' % self._indir)
+            raise Exception(f'ERROR: invalid path: {self._indir}')
 
         if not os.path.exists(self._outdir):
-            raise Exception('ERROR: %s is not a valid path' % self._outdir)
+            raise Exception(f'ERROR: invalid path: {self._outdir}')
 
-        self._regex_xyz_custom_sort = re.compile(r'([0-9]+)\.([0-9]+)\.([0-9]+)')
-        self._regex_xydate_custom_sort = re.compile(r'([0-9]+)\.([0-9]+)-.*-([0-9]{14})-')
-        self._regex_xydate_custom_short_sort = re.compile(r'([0-9]+)\.([0-9]+)-.*-([0-9]{8})-')
-        self._regex_builds = re.compile(r'%s-([^-]*)-.*' % DISTRO_NAME)
+        # nightly image format: {distro}-{proj.device}-{train}-nightly-{date}-githash{-uboot}.img.gz
+        self._regex_nightly_image = re.compile(r'''
+            ^(\w+)                   # Distro (alphanumerics)
+            -([0-9a-zA-Z_-]+[.]\w+)  # Device (alphanumerics+'-'.alphanumerics)
+            -(\d+[.]\d+)             # Train (decimals.decimals)
+            -nightly-\d+             # Date (decimals)
+            -([0-9a-fA-F]+)          # Git Hash (hexadecimals)
+            (\S*)                    # Uboot name with leading '-' (non-whitespace)
+            \.img\.gz''', re.VERBOSE)
+
+        # nightly tarball format: {distro}-{proj.device}-{train}-nightly-{date}-githash{-uboot}.tar
+        self._regex_nightly_tarball = re.compile(r'''
+            ^(\w+)                   # Distro (alphanumerics)
+            -([0-9a-zA-Z_-]+[.]\w+)  # Device (alphanumerics.alphanumerics)
+            -(\d+[.]\d+)             # Train (decimals.decimals)
+            -nightly-\d+             # Date (decimals)
+            -([0-9a-fA-F]+)          # Git Hash (hexadecimals)
+            (\S*)                    # Uboot name with leading '-' (non-whitespace)
+            \.tar''', re.VERBOSE)
+
+        # release image format: {distro}-{proj.device}-{maj.min}.bug{-uboot}.img.gz
+        self._regex_release_image = re.compile(r'''
+            ^(\w+)                   # Distro (alphanumerics)
+            -([0-9a-zA-Z_-]+[.]\w+)  # Device (alphanumerics.alphanumerics)
+            -(\d+[.]\d+)[.]\d+       # Train (decimals.decimals)
+            (\S*)                    # Uboot name with leading '-' (non-whitespace)
+            \.img\.gz''', re.VERBOSE)
+
+        # release tarball format: {distro}-{proj.device}-{maj.min}.bug.tar
+        self._regex_release_tarball = re.compile(r'''
+            ^(\w+)                   # Distro (alphanumerics)
+            -([0-9a-zA-Z_-]+[.]\w+)  # Device (alphanumerics+'-'.alphanumerics)
+            -(\d+[.]\d+)[.]\d+       # Train (decimals.decimals.decimals)
+            (\S*)                    # Uboot name with leading '-' (non-whitespace)
+            \.tar''', re.VERBOSE)
 
         self.display_name = {'A64.arm': 'Allwinner A64',
                              'AMLGX.arm': 'Amlogic GXBB/GXL/GXM/G12/SM1',
                              'Dragonboard.arm': 'Qualcomm Dragonboard',
                              'FORMAT.any': 'Tools',
                              'Generic.x86_64': 'Generic AMD/Intel/NVIDIA (x86_64)',
+                             'Generic-legacy.x86_64': 'Generic AMD/Intel/NVIDIA on X11 (x86_64)',
                              'H3.arm': 'Allwinner H3',
                              'H5.arm': 'Allwinner H5',
                              'H6.arm': 'Allwinner H6',
@@ -155,65 +192,29 @@ class ReleaseFile():
     def __exit__(self, type, value, traceback):
         pass
 
+    # provide version number; returns version number adjusted to stable release train
     def get_train_major_minor(self, item):
         for version in VERSIONS:
             match = VERSIONS[version]['regex'].search(item)
             if match:
                 adjust = VERSIONS[version]['adjust']
-                item_maj_min = float(match.groups(0)[0]) + adjust
-                return '%s-%0.1f' % (DISTRO_NAME, item_maj_min)
+                item_maj_min = float(match.group(0)) + adjust
+                return f'{item_maj_min:.1f}'
         return None
 
-    def match_version(self, item, build, train):
-        train_items = train.split('-')
-
-        major_minor = train_items[1]
-
-        if item.startswith('%s-%s-' % (DISTRO_NAME, build)) and \
-           train == self.get_train_major_minor(item):
-           return True
-
-        return False
-
-    def custom_sort_train(self, a, b):
-        a_items = a.split('-')
-        b_items = b.split('-')
-
-        a_builder = a_items[0]
-        b_builder = b_items[0]
-
-        if (a_builder == b_builder):
-          return (float(a_items[1]) - float(b_items[1]))
-        elif (a_builder < b_builder):
-          return -1
-        elif (a_builder > b_builder):
-          return +1
-
-    def custom_sort_release(self, a, b):
-        a_maj_min_patch = self._regex_xyz_custom_sort.search(a)
-        if not a_maj_min_patch:
-            a_maj_min_patch = self._regex_xydate_custom_sort.search(a)
-
-        if not a_maj_min_patch:
-            a_maj_min_patch = self._regex_xydate_custom_short_sort.search(a)
-
-        b_maj_min_patch = self._regex_xyz_custom_sort.search(b)
-        if not b_maj_min_patch:
-            b_maj_min_patch = self._regex_xydate_custom_sort.search(b)
-
-        if not b_maj_min_patch:
-            b_maj_min_patch = self._regex_xydate_custom_short_sort.search(b)
-
-        a_int = int('%04d%04d%014d' % (int(a_maj_min_patch.groups(0)[0]), int(a_maj_min_patch.groups(0)[1]), int(a_maj_min_patch.groups(0)[2])))
-        b_int = int('%04d%04d%014d' % (int(b_maj_min_patch.groups(0)[0]), int(b_maj_min_patch.groups(0)[1]), int(b_maj_min_patch.groups(0)[2])))
-
-        return (a_int - b_int)
-
     def get_details(self, path, train, build, file):
-        key = '%s;%s;%s' % (train, build, file)
+        key = f'{train};{build};{file}'
         if key not in self.oldhash:
-            print('Adding: %s in %s train' % (file, train))
-            file_digest = ChunkedHash().calculate_sha256(os.path.join(path, file))
+            print(f'Adding: {file} to {train} train')
+            # Use .sha256 file's checksum if present
+            if os.path.exists(os.path.join(path, f'{file}.sha256')):
+                if args.verbose:
+                    print(f'  Using sha256sum from: {file}.sha256')
+                with open(os.path.join(path, f'{file}.sha256'), 'r') as f:
+                    digest_contents = f.read()
+                file_digest = digest_contents.split(' ')[0]
+            else:
+                file_digest = ChunkedHash().calculate_sha256(os.path.join(path, file))
             file_size = str(os.path.getsize(os.path.join(path, file)))
         else:
             file_digest = self.oldhash[key]['sha256']
@@ -223,119 +224,244 @@ class ReleaseFile():
 
     def UpdateAll(self):
         self.ReadFile()
-
         self.UpdateFile()
-
         self.WriteFile()
 
-    def UpdateCombinedFile(self):
-        self.ReadFile()
+    def UpdateFile(self):
 
-        for (dirpath, dirnames, filenames) in os.walk(self._indir):
-            for project in dirnames:
-                self.UpdateFile(project)
-            break
+        # used in sorting file list; field 6 of list element is timestamp
+        def get_timestamp(data):
+            return data[6]
 
-        self.WriteFile()
-
-    def UpdateProjectFile(self, project):
-        self.ReadFile()
-
-        self.UpdateFile(project)
-
-        self.WriteFile()
-
-    def UpdateFile(self, project=None):
-        if project:
-            path = os.path.join(self._indir, project)
-            url = '%s/%s/' % (self._url, project)
-        else:
-            path = self._indir
-            url = '%s/' % self._url
+        path = self._indir
+        url = f'{self._url}/'
 
         # Walk top level source directory, selecting files for subsequent processing.
         #
-        # We're only interested in 'LibreELEC-.*.tar' files, and not interested
-        # in '.*-noobs.tar' files.
-        #
-        # img.gz files will be included in the output if there is a matching
-        # img.gz for the tar file.
-        #
-        files = []
-        images = []
-        for (dirpath, dirnames, filenames) in os.walk(path):
-            for f in filenames:
-                if f.startswith('%s-' % DISTRO_NAME):
-                    if f.endswith('.tar') and not f.endswith('-noobs.tar'):
-                        files.append(f)
-                    elif f.endswith('.img.gz'):
-                        images.append(f)
-            break
-
-        # From files, identify all release trains (8.0, 8.0, 8.2, 9.0 etc.)
+        # We're interested in 'LibreELEC-.*.(tar|img.gz)' files, but not '.*-noobs.tar' files.
+        list_of_files = []
+        list_of_filenames = []
         releases = []
-        for release in files:
-            train_major_minor = self.get_train_major_minor(release)
-            if train_major_minor:
-                releases.append(train_major_minor)
-            elif args.verbose:
-                print('IGNORED [Failed to match any train]: %s' % release)
+        builds = []
+        for (dirpath, dirnames, filenames) in os.walk(path):
+            if 'archive' in dirpath or 'upload' in dirpath:
+                if args.verbose:
+                    print(f'Skipping directory: {dirpath}')
+                continue
+            for f in filenames:
+                if f.startswith(f'{DISTRO_NAME}-'):
+                    if f.endswith('.tar') and not f.endswith('-noobs.tar'):
+                        # nightly tarballs
+                        if 'nightly' in f:
+                            try:
+                                parsed_fname = self._regex_nightly_tarball.search(f)
+                            except Exception:
+                                print(f'Failed to parse filename: {f}')
+                                continue
+                        # release tarballs
+                        else:
+                            try:
+                                parsed_fname = self._regex_release_tarball.search(f)
+                            except Exception:
+                                print(f'Failed to parse filename: {f}')
+                                continue
+                    elif f.endswith('.img.gz'):
+                        # nightly images
+                        if 'nightly' in f:
+                            try:
+                                parsed_fname = self._regex_nightly_image.search(f)
+                            except Exception:
+                                print(f'Failed to parse filename: {f}')
+                                continue
+                        else:
+                        # release images
+                            try:
+                                parsed_fname = self._regex_release_image.search(f)
+                            except Exception:
+                                print(f'Failed to parse filename: {f}')
+                                continue
+                    else:
+                        if args.verbose:
+                            print(f'Ignored file: {f}')
+                        continue
 
-        # Create a unique sorted list of release trains (8.0, 8.2, 9.0 etc.)
+#                    fname_parsed = parsed_fname.group(0)
+                    fname_distro = parsed_fname.group(1)
+                    fname_device = parsed_fname.group(2)
+                    fname_train = parsed_fname.group(3)
+                    if 'nightly' in f:
+                        fname_githash = parsed_fname.group(4)
+                        fname_uboot = parsed_fname.group(5).removeprefix('-')
+                    else:
+                        fname_githash = None
+                        fname_uboot = parsed_fname.group(4).removeprefix('-')
+                    fname_timestamp = datetime.fromtimestamp(os.path.getmtime(os.path.join(dirpath,f))).isoformat(sep=' ', timespec='seconds')
+
+                    distro_train = f'{fname_distro}-{self.get_train_major_minor(fname_train)}'
+                    if distro_train not in releases:
+                        if args.verbose:
+                            print(f'Adding to releases: {distro_train}')
+                        releases.append(distro_train)
+
+                    if fname_device not in builds:
+                        if args.verbose:
+                            print(f'Adding to builds: {fname_device}')
+                        builds.append(fname_device)
+
+                    list_of_files.append([f, distro_train, fname_device, fname_githash, fname_uboot, dirpath, fname_timestamp])
+                    list_of_filenames.append(f)
+                else:
+                    if args.verbose:
+                        print(f'Ignored file: {f}')
+                    continue
+
+        # Sort file list by timestamp
+        list_of_files.sort(key=get_timestamp)
+
+        # Sort list of release trains (8.0, 8.2, 9.0 etc.)
         trains = []
 
-        for train in sorted(list(set(releases)), key=cmp_to_key(self.custom_sort_train)):
+        for train in sorted(releases):
             trains.append(train)
+        if args.verbose:
+            print(trains)
 
-        print(trains)
+        # Sort list of builds (eg. RPi2.arm, Generic.x86_64 etc.)
+        builds = sorted(builds)
+        if args.verbose:
+            print(builds)
 
-        # Create a unique sorted list of builds (eg. RPi2.arm, Generix.x86_64 etc.)
-        builds = []
-        for release in files:
-            if self._regex_builds.match(release):
-                builds.append(self._regex_builds.findall(release)[0])
-        builds = sorted(list(set(builds)))
+        # make a dictionary where 'train;build' = [githashes of builds to add to json]
+        nightly_githashes = {}
 
-        print(builds)
+        for train in trains:     # ex: LibreELEC-10.0
+            for build in builds: # ex: RPi2.arm
+                for release_file in list_of_files:
+                    # process one train and build at a time, and only nightlies
+                    if train in release_file and build in release_file and 'nightly' in release_file[0]:
 
-        # For each train, add or update each matching build (tar and img.gz)
+                        file_githash = release_file[3]
+                        file_timestamp = release_file[6]
+                        continue_loop = False
+
+                        # add githash and timestamp to nightly_githashes if key doesn't exist
+                        if f'{train};{build}' not in nightly_githashes:
+                            nightly_githashes[f'{train};{build}'] = [f'{file_timestamp};{file_githash}']
+                            continue
+
+                        # skip if githash already present
+                        for data in nightly_githashes[f'{train};{build}']:
+                            if file_githash == data.split(';')[1]:
+                                continue_loop = True
+                                break
+                        if continue_loop:
+                            continue
+
+                        # add if less than desired number of files per device
+                        if len(nightly_githashes[f'{train};{build}']) < BUILDS_PER_DEVICE:
+                            nightly_githashes[f'{train};{build}'].append(f'{file_timestamp};{file_githash}')
+                            nightly_githashes[f'{train};{build}'] = sorted(nightly_githashes[f'{train};{build}'])
+                        # compare current githash to all those currently stored to see if current is newer
+                        else:
+                            compared_timestamp = nightly_githashes[f'{train};{build}'][0].split(';')[0]
+
+                            if file_timestamp > compared_timestamp:
+                                del nightly_githashes[f'{train};{build}'][0]
+                                nightly_githashes[f'{train};{build}'].append(f'{file_timestamp};{file_githash}')
+                                nightly_githashes[f'{train};{build}'] = sorted(nightly_githashes[f'{train};{build}'])
+
+                # strip timestamps from nightly_githashes for that device
+                try:
+                    for idx,data in enumerate(nightly_githashes[f'{train};{build}']):
+                        nightly_githashes[f'{train};{build}'][idx] = data.split(';')[1]
+                except KeyError:
+                    pass
+
+        # Add train data to json
         for train in trains:
             self.update_json[train] = {'url': url}
             self.update_json[train]['prettyname_regex'] = self._prettyname
             self.update_json[train]['project'] = {}
 
-            for build in builds:
-                releases = sorted([x for x in files if self.match_version(x, build, train)], key=cmp_to_key(self.custom_sort_release))
-
+        for train in trains:     # ex: LibreELEC-10.0
+            for build in builds: # ex: RPi2.arm
                 entries = {}
-                for i, release in enumerate(releases):
-                    entry = {'file': {}}
 
-                    # .tar
-                    (file_digest, file_size) = self.get_details(path, train, build, release)
-                    entry['file'] = {'name': release, 'sha256': file_digest, 'size': file_size}
+                for release_file in list(list_of_files): # copy so original may be modified
 
-                    # .img.gz
-                    image = re.sub('\.tar$', '.img.gz', release)
-                    if image in images:
-                        (file_digest, file_size) = self.get_details(path, train, build, image)
-                    else:
-                        image = file_digest = file_size = ''
-                    entry['image'] = {'name': image, 'sha256': file_digest, 'size': file_size}
+                    # file may have been processed on a previous loop
+                    if release_file not in list_of_files:
+                        continue
 
-                    # u-boot board-specific .img.gz
-                    uboot = []
-                    for image in sorted([x for x in images if x.startswith(re.sub('\.tar$', '-', release))]):
-                        (file_digest, file_size) = self.get_details(path, train, build, image)
-                        uboot.append({'name': image, 'sha256': file_digest, 'size': file_size})
-                    # Add u-boot if we have any entries, remove if not
-                    if uboot != []:
-                        entry['uboot'] = uboot
+                    # file is a nightly without a blessed githash
+                    try:
+                        if 'nightly' in release_file[0] and release_file[3] not in nightly_githashes[f'{train};{build}']:
+                            continue
+                    except KeyError:
+                        pass
 
-                    entries[i] = entry
+                    entry = {}
+                    entry_position = len(entries)
 
-                # Only add builds with releases
-                if len(entries) != 0:
+                    if train in release_file and build in release_file:
+
+                        base_filename = release_file[0].removesuffix('.tar')
+                        base_filename = base_filename.removesuffix('.img.gz')
+
+                        (file_digest, file_size) = self.get_details(release_file[5], train, build, release_file[0])
+
+                        # *.tar
+                        if release_file[0].endswith('.tar'):
+                            entry['file'] = {'name': release_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': release_file[6], 'subpath': release_file[5].removeprefix(f'{self._indir}/')}
+                            list_of_files.remove(release_file)
+                            list_of_filenames.remove(release_file[0])
+                            # check for image files with same name so they may be added
+                            if f'{base_filename}.img.gz' in list_of_filenames:
+                                for image_file in list(list_of_files):
+                                    if f'{base_filename}.img.gz' == image_file[0]:
+                                        (file_digest, file_size) = self.get_details(image_file[5], train, build, image_file[0])
+                                        entry['image'] = {'name': image_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': image_file[6], 'subpath': image_file[5].removeprefix(f'{self._indir}/')}
+                                        list_of_files.remove(image_file)
+                                        list_of_filenames.remove(image_file[0])
+#                            else:
+#                                entry['image'] = {'name': '', 'sha256': '', 'size': '', 'timestamp': '', 'subpath': ''}
+                        # *-{uboot}.img.gz
+                        elif release_file[4]:
+                            uboot = []
+                            uboot.append({'name': release_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': release_file[6], 'subpath': release_file[5].removeprefix(f'{self._indir}/')})
+                            list_of_files.remove(release_file)
+                            list_of_filenames.remove(release_file[0])
+                            # check for similar uboot releases
+                            for item in list(list_of_filenames):
+                                if item.startswith(base_filename.removesuffix(f'-{release_file[4]}')):
+                                    for image_file in list(list_of_files):
+                                        if image_file[0].startswith(base_filename.removesuffix(f'-{release_file[4]}')):
+                                            (file_digest, file_size) = self.get_details(image_file[5], train, build, image_file[0])
+                                            uboot.append({'name': image_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': image_file[6], 'subpath': image_file[5].removeprefix(f'{self._indir}/')})
+                                            list_of_files.remove(image_file)
+                                            list_of_filenames.remove(image_file[0])
+
+                            entry['uboot'] = uboot
+                        # *.img.gz
+                        elif release_file[0].endswith('.img.gz'):
+                            entry['image'] = {'name': release_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': release_file[6], 'subpath': release_file[5].removeprefix(f'{self._indir}/')}
+                            list_of_files.remove(release_file)
+                            list_of_filenames.remove(release_file[0])
+                            # check for tarball files with same name so they may be added
+                            if f'{base_filename}.tar' in list_of_filenames:
+                                for tarball_file in list(list_of_files):
+                                    if f'{base_filename}.tar' == tarball_file[0]:
+                                        (file_digest, file_size) = self.get_details(tarball_file[5], train, build, tarball_file[0])
+                                        entry['file'] = {'name': tarball_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': tarball_file[6], 'subpath': tarball_file[5].removeprefix(f'{self._indir}/')}
+                                        list_of_files.remove(tarball_file)
+                                        list_of_filenames.remove(tarball_file[0])
+#                            else:
+#                                entry['file'] = {'name': '', 'sha256': '', 'size': '', 'timestamp': '', 'subpath': ''}
+
+                        entries[entry_position] = entry
+
+                # adds each file "grouping" as its own release
+                if len(entries) > 0:
                     if build in self.display_name:
                         self.update_json[train]['project'][build] = {'displayName': self.display_name[build], 'releases': entries}
                     else:
@@ -348,22 +474,35 @@ class ReleaseFile():
             try:
                 with open(self._infile, 'r') as f:
                     oldjson = json.loads(f.read())
-                    for train in oldjson:
-                        for build in oldjson[train]['project']:
-                            for release in oldjson[train]['project'][build]['releases']:
-                                r = oldjson[train]['project'][build]['releases'][release]['file']
-                                self.oldhash['%s;%s;%s' % (train, build, r['name'])] = {'sha256': r['sha256'], 'size': r['size']}
-                                try:
-                                    i = oldjson[train]['project'][build]['releases'][release]['image']
-                                    self.oldhash['%s;%s;%s' % (train, build, i['name'])] = {'sha256': i['sha256'], 'size': i['size']}
-                                except:
-                                    pass
-                                try:
-                                    for i in oldjson[train]['project'][build]['releases'][release]['uboot']:
-                                        self.oldhash['%s;%s;%s' % (train, build, i['name'])] = {'sha256': i['sha256'], 'size': i['size']}
-                                except:
-                                    pass
-            except:
+                    if args.verbose:
+                        print(f'Read old json: {self._infile}')
+
+                for train in oldjson:
+                    for build in oldjson[train]['project']:
+                        for release in oldjson[train]['project'][build]['releases']:
+                            try:
+                                data = oldjson[train]['project'][build]['releases'][release]['file']
+                                if args.verbose:
+                                    print(f'Found old json entry for: {data["name"]}')
+                                self.oldhash[f'{train};{build};{data["name"]}'] = {'sha256': data['sha256'], 'size': data['size'], 'timestamp': data['timestamp']}
+                            except KeyError:
+                                pass
+                            try:
+                                data = oldjson[train]['project'][build]['releases'][release]['image']
+                                if args.verbose:
+                                    print(f'Found old json entry for: {data["name"]}')
+                                self.oldhash[f'{train};{build};{data["name"]}'] = {'sha256': data['sha256'], 'size': data['size'], 'timestamp': data['timestamp']}
+                            except KeyError:
+                                pass
+                            try:
+                                for data in oldjson[train]['project'][build]['releases'][release]['uboot']:
+                                    if args.verbose:
+                                        print(f'Found old json entry for: {data["name"]}')
+                                    self.oldhash[f'{train};{build};{data["name"]}'] = {'sha256': data['sha256'], 'size': data['size'], 'timestamp': data['timestamp']}
+                            except KeyError:
+                                pass
+            except Exception as e:
+                print(f'WARNING: Failed to read old json: {self._infile}\n  {e}')
                 self.oldhash = {}
 
     # Write a new file
@@ -381,24 +520,25 @@ _ = OrderedDict()
 for item in VERSIONS:
     _[item[0]] = {'adjust': item[1],
                   'minor': item[2],
-                  'regex': re.compile(r'-([0-9]+\.%s)[-.]' % item[2])}
+                  'regex': re.compile(fr'([0-9]+\.{item[2]})')}
 VERSIONS = _
 
-parser = argparse.ArgumentParser(description='Update %s %s with available tar/img.gz files.' % (DISTRO_NAME, JSON_FILE), \
+
+parser = argparse.ArgumentParser(description=f'Update {DISTRO_NAME} {JSON_FILE} with available tar/img.gz files.', \
                                  formatter_class=lambda prog: argparse.HelpFormatter(prog,max_help_position=25,width=90))
 
 parser.add_argument('-i', '--input', metavar='DIRECTORY', required=True, \
-                    help='Directory to parsed (release files, and any existing %s). By default %s will be ' \
-                         'written into this directory. Required property.' % (JSON_FILE, JSON_FILE))
+                    help=f'Directory to parsed (release files, and any existing {JSON_FILE}). By default, {JSON_FILE} will be ' \
+                         'written into this directory. Required property.')
 
 parser.add_argument('-u', '--url', metavar='URL', required=True, \
-                    help='Base URL for %s. Required property.' % JSON_FILE)
+                    help=f'Base URL for {JSON_FILE}. Required property.')
 
 parser.add_argument('-o', '--output', metavar='DIRECTORY', required=False, \
-                    help='Optional directory into which %s will be written. Defaults to same directory as --input.' % JSON_FILE)
+                    help=f'Optional directory into which {JSON_FILE} will be written. Defaults to same directory as --input.')
 
 parser.add_argument('-p', '--prettyname', metavar='REGEX', required=False, \
-                    help='Optional prettyname regex, default is %s' % PRETTYNAME)
+                    help=f'Optional prettyname regex, default is {PRETTYNAME}')
 
 parser.add_argument('-v', '--verbose', action="store_true", help='Enable verbose output (ignored files etc.)')
 
