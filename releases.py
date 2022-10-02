@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0
 # Copyright (C) 2016-present Team LibreELEC (https://libreelec.tv)
 
-# requires python >= 3.9
+# requires python >= 3.8
 
 import os
 import sys
@@ -81,14 +81,26 @@ class ChunkedHash():
             return ''
 
 class ReleaseFile():
+    def lchop(self, s, prefix):
+        """Remove prefix from string."""
+        if prefix and s.startswith(prefix):
+            return s[len(prefix):]
+        return s
+
+    def rchop(self, s, suffix):
+        """Remove suffix from string."""
+        if suffix and s.endswith(suffix):
+            return s[:-len(suffix)]
+        return s
+
     def __init__(self, args):
         self._json_file = JSON_FILE
 
-        self._indir = args.input.removesuffix(os.path.sep)
-        self._url = args.url.removesuffix('/')
+        self._indir = self.rchop(args.input, os.path.sep)
+        self._url = self.rchop(args.url, '/')
 
         if args.output:
-            self._outdir = args.output.removesuffix(os.path.sep)
+            self._outdir = self.rchop(args.output, os.path.sep)
         else:
             self._outdir = self._indir
 
@@ -291,10 +303,10 @@ class ReleaseFile():
                     fname_train = parsed_fname.group(3)
                     if 'nightly' in f:
                         fname_githash = parsed_fname.group(4)
-                        fname_uboot = parsed_fname.group(5).removeprefix('-')
+                        fname_uboot = self.lchop(parsed_fname.group(5), '-')
                     else:
                         fname_githash = None
-                        fname_uboot = parsed_fname.group(4).removeprefix('-')
+                        fname_uboot = self.lchop(parsed_fname.group(4), '-')
                     fname_timestamp = datetime.fromtimestamp(os.path.getmtime(os.path.join(dirpath,f))).isoformat(sep=' ', timespec='seconds')
 
                     distro_train = f'{fname_distro}-{self.get_train_major_minor(fname_train)}'
@@ -405,14 +417,14 @@ class ReleaseFile():
 
                     if train in release_file and build in release_file:
 
-                        base_filename = release_file[0].removesuffix('.tar')
-                        base_filename = base_filename.removesuffix('.img.gz')
+                        base_filename = self.rchop(release_file[0], '.tar')
+                        base_filename = self.rchop(base_filename, '.img.gz')
 
                         (file_digest, file_size) = self.get_details(release_file[5], train, build, release_file[0])
 
                         # *.tar
                         if release_file[0].endswith('.tar'):
-                            entry['file'] = {'name': release_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': release_file[6], 'subpath': release_file[5].removeprefix(f'{self._indir}/')}
+                            entry['file'] = {'name': release_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': release_file[6], 'subpath': self.lchop(release_file[5], f'{self._indir}/')}
                             list_of_files.remove(release_file)
                             list_of_filenames.remove(release_file[0])
                             # check for image files with same name so they may be added
@@ -420,7 +432,7 @@ class ReleaseFile():
                                 for image_file in list(list_of_files):
                                     if f'{base_filename}.img.gz' == image_file[0]:
                                         (file_digest, file_size) = self.get_details(image_file[5], train, build, image_file[0])
-                                        entry['image'] = {'name': image_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': image_file[6], 'subpath': image_file[5].removeprefix(f'{self._indir}/')}
+                                        entry['image'] = {'name': image_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': image_file[6], 'subpath': self.lchop(image_file[5], f'{self._indir}/')}
                                         list_of_files.remove(image_file)
                                         list_of_filenames.remove(image_file[0])
 #                            else:
@@ -428,23 +440,23 @@ class ReleaseFile():
                         # *-{uboot}.img.gz
                         elif release_file[4]:
                             uboot = []
-                            uboot.append({'name': release_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': release_file[6], 'subpath': release_file[5].removeprefix(f'{self._indir}/')})
+                            uboot.append({'name': release_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': release_file[6], 'subpath': self.lchop(release_file[5], f'{self._indir}/')})
                             list_of_files.remove(release_file)
                             list_of_filenames.remove(release_file[0])
                             # check for similar uboot releases
                             for item in list(list_of_filenames):
-                                if item.startswith(base_filename.removesuffix(f'-{release_file[4]}')):
+                                if item.startswith(self.rchop(base_filename, f'-{release_file[4]}')):
                                     for image_file in list(list_of_files):
-                                        if image_file[0].startswith(base_filename.removesuffix(f'-{release_file[4]}')):
+                                        if image_file[0].startswith(self.rchop(base_filename, f'-{release_file[4]}')):
                                             (file_digest, file_size) = self.get_details(image_file[5], train, build, image_file[0])
-                                            uboot.append({'name': image_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': image_file[6], 'subpath': image_file[5].removeprefix(f'{self._indir}/')})
+                                            uboot.append({'name': image_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': image_file[6], 'subpath': self.lchop(image_file[5], f'{self._indir}/')})
                                             list_of_files.remove(image_file)
                                             list_of_filenames.remove(image_file[0])
 
                             entry['uboot'] = uboot
                         # *.img.gz
                         elif release_file[0].endswith('.img.gz'):
-                            entry['image'] = {'name': release_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': release_file[6], 'subpath': release_file[5].removeprefix(f'{self._indir}/')}
+                            entry['image'] = {'name': release_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': release_file[6], 'subpath': self.lchop(release_file[5], f'{self._indir}/')}
                             list_of_files.remove(release_file)
                             list_of_filenames.remove(release_file[0])
                             # check for tarball files with same name so they may be added
@@ -452,7 +464,7 @@ class ReleaseFile():
                                 for tarball_file in list(list_of_files):
                                     if f'{base_filename}.tar' == tarball_file[0]:
                                         (file_digest, file_size) = self.get_details(tarball_file[5], train, build, tarball_file[0])
-                                        entry['file'] = {'name': tarball_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': tarball_file[6], 'subpath': tarball_file[5].removeprefix(f'{self._indir}/')}
+                                        entry['file'] = {'name': tarball_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': tarball_file[6], 'subpath': self.lchop(tarball_file[5], f'{self._indir}/')}
                                         list_of_files.remove(tarball_file)
                                         list_of_filenames.remove(tarball_file[0])
 #                            else:
