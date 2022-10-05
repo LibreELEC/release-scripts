@@ -5,15 +5,14 @@
 
 # requires python >= 3.8
 
-import os
-import sys
-import re
 import argparse
 import hashlib
 import json
-from datetime import datetime
-from functools import cmp_to_key
+import os
+import re
 from collections import OrderedDict
+from datetime import datetime
+
 
 # x.80.z        => (x+1).0.z  (pre-alpha, use next major train)
 # x.90.z        => (x+1).0.z  (alpha, use next major train)
