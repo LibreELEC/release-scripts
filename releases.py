@@ -260,7 +260,27 @@ class ReleaseFile():
                     print(f'Skipping directory: {dirpath}')
                 continue
             for f in filenames:
-                if f.startswith(f'{DISTRO_NAME}-'):
+                # hardcode the image used to wipe sd cards by the usb-sd tool
+                if f.startswith('LibreELEC-FORMAT.any-1.0.0-erase-usb-sd'):
+                    fname_device = 'FORMAT.any'
+                    fname_githash = None
+                    fname_uboot = ''
+                    fname_timestamp = '1970-01-01 00:00:00'
+                    distro_train = 'LibreELEC-1.0'
+
+                    if distro_train not in releases:
+                        if args.verbose:
+                            print(f'Adding to releases: {distro_train}')
+                        releases.append(distro_train)
+                    if fname_device not in builds:
+                        if args.verbose:
+                            print(f'Adding to builds: {fname_device}')
+                        builds.append(fname_device)
+
+                    list_of_files.append([f, distro_train, fname_device, fname_githash, fname_uboot, dirpath, fname_timestamp])
+                    list_of_filenames.append(f)
+
+                elif f.startswith(f'{DISTRO_NAME}-'):
                     if f.endswith('.tar') and not f.endswith('-noobs.tar'):
                         # nightly tarballs
                         if 'nightly' in f:
