@@ -94,30 +94,19 @@ class ReleaseFile():
 
     def __init__(self, args):
         self._json_file = JSON_FILE
-
         self._indir = self.rchop(args.input, os.path.sep)
         self._url = self.rchop(args.url, '/')
-
-        if args.output:
-            self._outdir = self.rchop(args.output, os.path.sep)
-        else:
-            self._outdir = self._indir
-
+        self._outdir = self.rchop(args.output, os.path.sep) if args.output else self._indir
         self._infile  = os.path.join(self._indir, self._json_file)
         self._outfile = os.path.join(self._outdir, self._json_file)
-
-        if args.prettyname:
-            self._prettyname = args.prettyname
-        else:
-            self._prettyname = PRETTYNAME
+        self._prettyname = args.prettyname if args.prettyname else PRETTYNAME
 
         if not os.path.exists(self._indir):
             raise Exception(f'ERROR: invalid path: {self._indir}')
-
         if not os.path.exists(self._outdir):
             raise Exception(f'ERROR: invalid path: {self._outdir}')
 
-        # nightly image format: {distro}-{proj.device}-{train}-nightly-{date}-githash{-uboot}.img.gz
+        # nightly image format: {distro}-{proj.device}-{train}-nightly-{date}-githash{-uboot}(.img.gz || .tar)
         self._regex_nightly_image = re.compile(r'''
             ^(\w+)                   # Distro (alphanumerics)
             -([0-9a-zA-Z_-]+[.]\w+)  # Device (alphanumerics+'-'.alphanumerics)
@@ -125,33 +114,14 @@ class ReleaseFile():
             -nightly-\d+             # Date (decimals)
             -([0-9a-fA-F]+)          # Git Hash (hexadecimals)
             (\S*)                    # Uboot name with leading '-' (non-whitespace)
-            \.img\.gz''', re.VERBOSE)
-
-        # nightly tarball format: {distro}-{proj.device}-{train}-nightly-{date}-githash{-uboot}.tar
-        self._regex_nightly_tarball = re.compile(r'''
-            ^(\w+)                   # Distro (alphanumerics)
-            -([0-9a-zA-Z_-]+[.]\w+)  # Device (alphanumerics.alphanumerics)
-            -(\d+[.]\d+)             # Train (decimals.decimals)
-            -nightly-\d+             # Date (decimals)
-            -([0-9a-fA-F]+)          # Git Hash (hexadecimals)
-            (\S*)                    # Uboot name with leading '-' (non-whitespace)
-            \.tar''', re.VERBOSE)
-
-        # release image format: {distro}-{proj.device}-{maj.min}.bug{-uboot}.img.gz
+            (\.img\.gz|\.tar)''', re.VERBOSE)
+        # release image format: {distro}-{proj.device}-{maj.min}.bug{-uboot}(.img.gz || .tar)
         self._regex_release_image = re.compile(r'''
             ^(\w+)                   # Distro (alphanumerics)
             -([0-9a-zA-Z_-]+[.]\w+)  # Device (alphanumerics.alphanumerics)
-            -(\d+[.]\d+)[.]\d+       # Train (decimals.decimals)
+            -(\d+[.]\d+)[.]\d+       # Train (decimals.decimals).decimals
             (\S*)                    # Uboot name with leading '-' (non-whitespace)
-            \.img\.gz''', re.VERBOSE)
-
-        # release tarball format: {distro}-{proj.device}-{maj.min}.bug.tar
-        self._regex_release_tarball = re.compile(r'''
-            ^(\w+)                   # Distro (alphanumerics)
-            -([0-9a-zA-Z_-]+[.]\w+)  # Device (alphanumerics+'-'.alphanumerics)
-            -(\d+[.]\d+)[.]\d+       # Train (decimals.decimals.decimals)
-            (\S*)                    # Uboot name with leading '-' (non-whitespace)
-            \.tar''', re.VERBOSE)
+            (\.img\.gz|\.tar)''', re.VERBOSE)
 
         self.display_name = {'A64.arm': 'Allwinner A64',
                              'AMLGX.arm': 'Amlogic GXBB/GXL/GXM/G12/SM1',
@@ -230,7 +200,6 @@ class ReleaseFile():
         else:
             file_digest = self.oldhash[key]['sha256']
             file_size = self.oldhash[key]['size']
-
         return (file_digest, file_size)
 
     def UpdateAll(self):
@@ -248,8 +217,7 @@ class ReleaseFile():
         url = f'{self._url}/'
 
         # Walk top level source directory, selecting files for subsequent processing.
-        #
-        # We're interested in 'LibreELEC-.*.(tar|img.gz)' files, but not '.*-noobs.tar' files.
+        # Search for 'LibreELEC-.*.(tar|img.gz)' files, but not '.*-noobs.tar' files.
         list_of_files = []
         list_of_filenames = []
         releases = []
@@ -281,22 +249,7 @@ class ReleaseFile():
                     list_of_filenames.append(f)
 
                 elif f.startswith(f'{DISTRO_NAME}-'):
-                    if f.endswith('.tar') and not f.endswith('-noobs.tar'):
-                        # nightly tarballs
-                        if 'nightly' in f:
-                            try:
-                                parsed_fname = self._regex_nightly_tarball.search(f)
-                            except Exception:
-                                print(f'Failed to parse filename: {f}')
-                                continue
-                        # release tarballs
-                        else:
-                            try:
-                                parsed_fname = self._regex_release_tarball.search(f)
-                            except Exception:
-                                print(f'Failed to parse filename: {f}')
-                                continue
-                    elif f.endswith('.img.gz'):
+                    if (f.endswith('.tar') or f.endswith('.img.gz')) and not f.endswith('-noobs.tar'):
                         # nightly images
                         if 'nightly' in f:
                             try:
@@ -304,8 +257,8 @@ class ReleaseFile():
                             except Exception:
                                 print(f'Failed to parse filename: {f}')
                                 continue
-                        else:
                         # release images
+                        else:
                             try:
                                 parsed_fname = self._regex_release_image.search(f)
                             except Exception:
@@ -440,6 +393,7 @@ class ReleaseFile():
                         base_filename = self.rchop(base_filename, '.img.gz')
 
                         (file_digest, file_size) = self.get_details(release_file[5], train, build, release_file[0])
+                        # don't combine lchops; generates incorrect file_subpath for files not in subdir
                         file_subpath = self.lchop(release_file[5], self._indir)
                         file_subpath = self.lchop(file_subpath, '/')
 
@@ -453,6 +407,7 @@ class ReleaseFile():
                                 for image_file in list(list_of_files):
                                     if f'{base_filename}.img.gz' == image_file[0]:
                                         (file_digest, file_size) = self.get_details(image_file[5], train, build, image_file[0])
+                                        # don't combine lchops; generates incorrect file_subpath for files not in subdir
                                         file_subpath = self.lchop(image_file[5], self._indir)
                                         file_subpath = self.lchop(file_subpath, '/')
                                         entry['image'] = {'name': image_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': image_file[6], 'subpath': file_subpath}
@@ -472,6 +427,7 @@ class ReleaseFile():
                                     for image_file in list(list_of_files):
                                         if image_file[0].startswith(self.rchop(base_filename, f'-{release_file[4]}')):
                                             (file_digest, file_size) = self.get_details(image_file[5], train, build, image_file[0])
+                                            # don't combine lchops; generates incorrect file_subpath for files not in subdir
                                             file_subpath = self.lchop(image_file[5], self._indir)
                                             file_subpath = self.lchop(file_subpath, '/')
                                             uboot.append({'name': image_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': image_file[6], 'subpath': file_subpath})
@@ -489,6 +445,7 @@ class ReleaseFile():
                                 for tarball_file in list(list_of_files):
                                     if f'{base_filename}.tar' == tarball_file[0]:
                                         (file_digest, file_size) = self.get_details(tarball_file[5], train, build, tarball_file[0])
+                                        # don't combine lchops; generates incorrect file_subpath if not in subdir
                                         file_subpath = self.lchop(tarball_file[5], self._indir)
                                         file_subpath = self.lchop(file_subpath, '/')
                                         entry['file'] = {'name': tarball_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': tarball_file[6], 'subpath': file_subpath}
@@ -515,7 +472,10 @@ class ReleaseFile():
                     oldjson = json.loads(f.read())
                     if args.verbose:
                         print(f'Read old json: {self._infile}')
-
+            except Exception as e:
+                print(f'WARNING: Failed to read old json: {self._infile}\n  {e}')
+                self.oldhash = {}
+            else:
                 for train in oldjson:
                     for build in oldjson[train]['project']:
                         for release in oldjson[train]['project'][build]['releases']:
@@ -540,9 +500,6 @@ class ReleaseFile():
                                     self.oldhash[f'{train};{build};{data["name"]}'] = {'sha256': data['sha256'], 'size': data['size'], 'timestamp': data['timestamp']}
                             except KeyError:
                                 pass
-            except Exception as e:
-                print(f'WARNING: Failed to read old json: {self._infile}\n  {e}')
-                self.oldhash = {}
 
     # Write a new file
     def WriteFile(self):
