@@ -119,7 +119,7 @@ class ReleaseFile():
         self._regex_release_image = re.compile(r'''
             ^(\w+)                   # Distro (alphanumerics)
             -([0-9a-zA-Z_-]+[.]\w+)  # Device (alphanumerics.alphanumerics)
-            -(\d+[.]\d+)[.]\d+       # Train (decimals.decimals).decimals
+            -(\d+\.\d+)\.\d+(\.\d+)? # Train (decimals.decimals).decimals(.decimals(optional))
             (\S*)                    # Uboot name with leading '-' (non-whitespace)
             (\.img\.gz|\.tar)''', re.VERBOSE)
 
@@ -275,10 +275,10 @@ class ReleaseFile():
                     fname_train = parsed_fname.group(3)
                     if 'nightly' in f:
                         fname_githash = parsed_fname.group(4)
-                        fname_uboot = self.lchop(parsed_fname.group(5), '-')
                     else:
+                        #parsed_fname.group(4) would be the 4th version number
                         fname_githash = None
-                        fname_uboot = self.lchop(parsed_fname.group(4), '-')
+                    fname_uboot = self.lchop(parsed_fname.group(5), '-')
                     fname_timestamp = datetime.fromtimestamp(os.path.getmtime(os.path.join(dirpath,f))).isoformat(sep=' ', timespec='seconds')
 
                     distro_train = f'{fname_distro}-{self.get_train_major_minor(fname_train)}'
