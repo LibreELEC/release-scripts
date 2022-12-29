@@ -399,22 +399,35 @@ class ReleaseFile():
 
                         # *.tar
                         if release_file[0].endswith('.tar'):
+                            uboot = []
                             entry['file'] = {'name': release_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': release_file[6], 'subpath': file_subpath}
                             list_of_files.remove(release_file)
                             list_of_filenames.remove(release_file[0])
-                            # check for image files with same name so they may be added
-                            if f'{base_filename}.img.gz' in list_of_filenames:
-                                for image_file in list(list_of_files):
-                                    if f'{base_filename}.img.gz' == image_file[0]:
-                                        (file_digest, file_size) = self.get_details(image_file[5], train, build, image_file[0])
-                                        # don't combine lchops; generates incorrect file_subpath for files not in subdir
-                                        file_subpath = self.lchop(image_file[5], self._indir)
-                                        file_subpath = self.lchop(file_subpath, '/')
-                                        entry['image'] = {'name': image_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': image_file[6], 'subpath': file_subpath}
-                                        list_of_files.remove(image_file)
-                                        list_of_filenames.remove(image_file[0])
-#                            else:
-#                                entry['image'] = {'name': '', 'sha256': '', 'size': '', 'timestamp': '', 'subpath': ''}
+                            # check for image files with same base name to add
+                            for image_file in list(list_of_files):
+                                # tar goes to a device using bare image files
+                                if f'{base_filename}.img.gz' == image_file[0]:
+                                    (file_digest, file_size) = self.get_details(image_file[5], train, build, image_file[0])
+                                    # don't combine lchops; generates incorrect file_subpath for files not in subdir
+                                    file_subpath = self.lchop(image_file[5], self._indir)
+                                    file_subpath = self.lchop(file_subpath, '/')
+                                    entry['image'] = {'name': image_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': image_file[6], 'subpath': file_subpath}
+                                    list_of_files.remove(image_file)
+                                    list_of_filenames.remove(image_file[0])
+                                # tar goes to a device using uboot image files
+                                elif image_file[0].startswith(base_filename):
+                                    for uboot_file in list(list_of_files):
+                                        if uboot_file[0].startswith(base_filename) and not uboot_file[0].endswith('.tar'):
+                                            (file_digest, file_size) = self.get_details(uboot_file[5], train, build, uboot_file[0])
+                                            # don't combine lchops; generates incorrect file_subpath for files not in subdir
+                                            file_subpath = self.lchop(uboot_file[5], self._indir)
+                                            file_subpath = self.lchop(file_subpath, '/')
+                                            uboot.append({'name': uboot_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': uboot_file[6], 'subpath': file_subpath})
+                                            list_of_files.remove(uboot_file)
+                                            list_of_filenames.remove(uboot_file[0])
+                                    if uboot:
+                                        entry['uboot'] = uboot
+
                         # *-{uboot}.img.gz
                         elif release_file[4]:
                             uboot = []
@@ -425,7 +438,17 @@ class ReleaseFile():
                             for item in list(list_of_filenames):
                                 if item.startswith(self.rchop(base_filename, f'-{release_file[4]}')):
                                     for image_file in list(list_of_files):
-                                        if image_file[0].startswith(self.rchop(base_filename, f'-{release_file[4]}')):
+                                        # base tarballs
+                                        if f'{self.rchop(base_filename, f"-{release_file[4]}" )}.tar' == image_file[0]:
+                                            (file_digest, file_size) = self.get_details(image_file[5], train, build, image_file[0])
+                                            # don't combine lchops; generates incorrect file_subpath for files not in subdir
+                                            file_subpath = self.lchop(image_file[5], self._indir)
+                                            file_subpath = self.lchop(file_subpath, '/')
+                                            entry['file'] = {'name': image_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': image_file[6], 'subpath': file_subpath}
+                                            list_of_files.remove(image_file)
+                                            list_of_filenames.remove(image_file[0])
+                                        # other uboot images
+                                        elif image_file[0].startswith(self.rchop(base_filename, f'-{release_file[4]}')) and not image_file[0].endswith('.tar'):
                                             (file_digest, file_size) = self.get_details(image_file[5], train, build, image_file[0])
                                             # don't combine lchops; generates incorrect file_subpath for files not in subdir
                                             file_subpath = self.lchop(image_file[5], self._indir)
@@ -441,18 +464,15 @@ class ReleaseFile():
                             list_of_files.remove(release_file)
                             list_of_filenames.remove(release_file[0])
                             # check for tarball files with same name so they may be added
-                            if f'{base_filename}.tar' in list_of_filenames:
-                                for tarball_file in list(list_of_files):
-                                    if f'{base_filename}.tar' == tarball_file[0]:
-                                        (file_digest, file_size) = self.get_details(tarball_file[5], train, build, tarball_file[0])
-                                        # don't combine lchops; generates incorrect file_subpath if not in subdir
-                                        file_subpath = self.lchop(tarball_file[5], self._indir)
-                                        file_subpath = self.lchop(file_subpath, '/')
-                                        entry['file'] = {'name': tarball_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': tarball_file[6], 'subpath': file_subpath}
-                                        list_of_files.remove(tarball_file)
-                                        list_of_filenames.remove(tarball_file[0])
-#                            else:
-#                                entry['file'] = {'name': '', 'sha256': '', 'size': '', 'timestamp': '', 'subpath': ''}
+                            for tarball_file in list(list_of_files):
+                                if f'{base_filename}.tar' == tarball_file[0]:
+                                    (file_digest, file_size) = self.get_details(tarball_file[5], train, build, tarball_file[0])
+                                    # don't combine lchops; generates incorrect file_subpath if not in subdir
+                                    file_subpath = self.lchop(tarball_file[5], self._indir)
+                                    file_subpath = self.lchop(file_subpath, '/')
+                                    entry['file'] = {'name': tarball_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': tarball_file[6], 'subpath': file_subpath}
+                                    list_of_files.remove(tarball_file)
+                                    list_of_filenames.remove(tarball_file[0])
 
                         entries[entry_position] = entry
 
