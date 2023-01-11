@@ -208,13 +208,6 @@ class ReleaseFile():
         self.WriteFile()
 
     def UpdateFile(self):
-
-        # used in sorting file list; field 6 of list element is timestamp, 7 is filetype
-        def get_timestamp(data):
-            return data[6]
-        def get_filetype(data):
-            return data[7]
-
         path = self._indir
         url = f'{self._url}/'
 
@@ -301,8 +294,8 @@ class ReleaseFile():
                         print(f'Ignored file: {f}')
                     continue
 
-        # Sort file list by timestamp then all tarballs before images
-        list_of_files.sort(key=get_timestamp)
+        # Sort file list by timestamp
+        list_of_files.sort(key=lambda data: data[6])
 
         # Sort list of release trains (8.0, 8.2, 9.0 etc.)
         trains = []
