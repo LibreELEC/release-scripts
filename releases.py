@@ -209,9 +209,11 @@ class ReleaseFile():
 
     def UpdateFile(self):
 
-        # used in sorting file list; field 6 of list element is timestamp
+        # used in sorting file list; field 6 of list element is timestamp, 7 is filetype
         def get_timestamp(data):
             return data[6]
+        def get_filetype(data):
+            return data[7]
 
         path = self._indir
         url = f'{self._url}/'
@@ -299,7 +301,7 @@ class ReleaseFile():
                         print(f'Ignored file: {f}')
                     continue
 
-        # Sort file list by timestamp
+        # Sort file list by timestamp then all tarballs before images
         list_of_files.sort(key=get_timestamp)
 
         # Sort list of release trains (8.0, 8.2, 9.0 etc.)
@@ -415,7 +417,8 @@ class ReleaseFile():
                                     list_of_files.remove(image_file)
                                     list_of_filenames.remove(image_file[0])
                                 # tar goes to a device using uboot image files
-                                elif image_file[0].startswith(base_filename):
+                                # XXX: Quirk for LE 9.0: Skip uboot image inclusion as they weren't used in that release but generated images will be swept up in search.
+                                elif image_file[0].startswith(base_filename) and train != 'LibreELEC-9.0':
                                     for uboot_file in list(list_of_files):
                                         if uboot_file[0].startswith(base_filename) and not uboot_file[0].endswith('.tar'):
                                             (file_digest, file_size) = self.get_details(uboot_file[5], train, build, uboot_file[0])
@@ -429,7 +432,8 @@ class ReleaseFile():
                                         entry['uboot'] = uboot
 
                         # *-{uboot}.img.gz
-                        elif release_file[4]:
+                        # XXX: Quirk for LE 9.0: Skip uboot image inclusion as they weren't used in that release but generated images will be swept up in search.
+                        elif release_file[4] and train != 'LibreELEC-9.0':
                             uboot = []
                             uboot.append({'name': release_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': release_file[6], 'subpath': file_subpath})
                             list_of_files.remove(release_file)
@@ -439,7 +443,7 @@ class ReleaseFile():
                                 if item.startswith(self.rchop(base_filename, f'-{release_file[4]}')):
                                     for image_file in list(list_of_files):
                                         # base tarballs
-                                        if f'{self.rchop(base_filename, f"-{release_file[4]}" )}.tar' == image_file[0]:
+                                        if f'{self.rchop(base_filename, f"-{release_file[4]}")}.tar' == image_file[0]:
                                             (file_digest, file_size) = self.get_details(image_file[5], train, build, image_file[0])
                                             # don't combine lchops; generates incorrect file_subpath for files not in subdir
                                             file_subpath = self.lchop(image_file[5], self._indir)
