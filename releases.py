@@ -143,11 +143,11 @@ class ReleaseFile():
             \.tar''', re.VERBOSE)
 
         self.display_name = {'A64.arm': 'Allwinner A64',
-                             'AMLGX.arm': 'Amlogic GXBB/GXL/GXM/G12/SM1',
+                             'AMLGX.arm': 'Amlogic GXBB/GXL/GXM',
                              'Dragonboard.arm': 'Qualcomm Dragonboard',
                              'FORMAT.any': 'Tools',
                              'Generic.x86_64': 'Generic AMD/Intel/NVIDIA (x86_64)',
-                             'Generic-legacy.x86_64': 'Generic AMD/Intel/NVIDIA on X11 (x86_64)',
+                             'Generic-legacy.x86_64': 'Generic-legacy AMD/Intel/NVIDIA on X11 (x86_64)',
                              'H3.arm': 'Allwinner H3',
                              'H5.arm': 'Allwinner H5',
                              'H6.arm': 'Allwinner H6',
