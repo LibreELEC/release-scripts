@@ -50,6 +50,7 @@ VERSIONS = [
 BUILDS_PER_DEVICE=10
 JSON_FILE = 'releases.json'
 DISTRO_NAME = 'LibreELEC'
+CANARY_PERIOD = 21 # Days
 PRETTYNAME = f'^{DISTRO_NAME}-.*-([0-9]+\.[0-9]+\.[0-9]+)'
 #PRETTYNAME_NIGHTLY = f'^{DISTRO_NAME}-.*-([0-9]+\.[0-9]+\-.*-[0-9]{8}-[0-9a-z]{7})'
 
@@ -358,7 +359,7 @@ class ReleaseFile():
 
         # Add train data to json
         for train in trains:
-            self.update_json[train] = {'url': url}
+            self.update_json[train] = {'canary': CANARY_PERIOD, 'url': url}
             self.update_json[train]['prettyname_regex'] = self._prettyname
             self.update_json[train]['project'] = {}
 
