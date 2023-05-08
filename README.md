@@ -1,12 +1,17 @@
 # Description 
-The scripts in the repository are used to generate the releases.json file used in the USB-SD-Creator and in the addon's update feature present in LibreELEC 10.0+.
+The scripts in the repository are used to:
+- generate the releases.json file used in the USB-SD-Creator and in the addon's update feature present in LibreELEC 12.0+
+- generate json file used for Raspberry Pi Imager
+- manage stale image files in the release testing archive
 
-The script generates a json formatted output with the filenames, file sizes, sha256 sums, modification timestamp, and the directory subpath the file resides in.
+# releases.py
+releases.py generates json formatted output with the filenames, file sizes, sha256 sums, modification timestamp, and the directory subpath the file resides in.
 
-For example
+For example:
 ```
 {
   "LibreELEC-10.0": {
+    "canary": 21,
     "prettyname_regex": "^LibreELEC-.*-([0-9]+\\.[0-9]+\\-.*-[0-9]{8}-[0-9a-z]{7})",
     "project": {
       "RPi2.arm": {
@@ -36,7 +41,7 @@ For example
 ```
 For the full output see, https://releases.libreelec.tv/releases.json
 
-# How to run
+## How to run
 ```
 python releases.py -i /path/to/releases -u http://releases.yoururl.com/ -o /path/to/releases -v
 ```
