@@ -66,10 +66,10 @@ class ChunkedHash():
     @staticmethod
     def file_as_blockiter(afile, blocksize=65536):
         with afile:
-          block = afile.read(blocksize)
-          while len(block) > 0:
-              yield block
-              block = afile.read(blocksize)
+            block = afile.read(blocksize)
+            while len(block) > 0:
+                yield block
+                block = afile.read(blocksize)
 
     # Calculate sha256 hash for a file
     @staticmethod
