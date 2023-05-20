@@ -48,7 +48,6 @@ VERSIONS = [
            ]
 
 BUILDS_PER_DEVICE=10
-JSON_FILE = 'releases.json'
 DISTRO_NAME = 'LibreELEC'
 CANARY_PERIOD = 21 # Days
 PRETTYNAME = f'^{DISTRO_NAME}-.*-([0-9]+\.[0-9]+\.[0-9]+)'
@@ -94,7 +93,7 @@ class ReleaseFile():
         return s
 
     def __init__(self, args):
-        self._json_file = JSON_FILE
+        self._json_file = args.json if args.json else 'releases.json'
         self._indir = self.rchop(args.input, os.path.sep)
         self._url = self.rchop(args.url, '/')
         self._outdir = self.rchop(args.output, os.path.sep) if args.output else self._indir
@@ -565,24 +564,27 @@ for item in VERSIONS:
 VERSIONS = _
 
 
-parser = argparse.ArgumentParser(description=f'Update {DISTRO_NAME} {JSON_FILE} with available tar/img.gz files.', \
+parser = argparse.ArgumentParser(description=f'Update {DISTRO_NAME} release json file with available tar/img.gz files.', \
                                  formatter_class=lambda prog: argparse.HelpFormatter(prog,max_help_position=25,width=90))
 
 parser.add_argument('-i', '--input', metavar='DIRECTORY', required=True, \
-                    help=f'Directory to parsed (release files, and any existing {JSON_FILE}). By default, {JSON_FILE} will be ' \
-                         'written into this directory. Required property.')
+                    help=f'Directory to parsed (release files, and any existing json file (with the same name). By default, ' \
+                         'the json file will be written into this directory. Required property.')
+
+parser.add_argument('-j', '--json', metavar='JSONNAME', required=False, \
+                    help='Filename of generated json file.')
 
 parser.add_argument('-l', '--legacy', action='store_true', \
                     help='Generate legacy formatted json')
 
-parser.add_argument('-u', '--url', metavar='URL', required=True, \
-                    help=f'Base URL for {JSON_FILE}. Required property.')
-
 parser.add_argument('-o', '--output', metavar='DIRECTORY', required=False, \
-                    help=f'Optional directory into which {JSON_FILE} will be written. Defaults to same directory as --input.')
+                    help=f'Optional directory into which json file will be written. Defaults to same directory as --input.')
 
 parser.add_argument('-p', '--prettyname', metavar='REGEX', required=False, \
                     help=f'Optional prettyname regex, default is {PRETTYNAME}')
+
+parser.add_argument('-u', '--url', metavar='URL', required=True, \
+                    help=f'Base URL for json file. Required property.')
 
 parser.add_argument('-v', '--verbose', action="store_true", help='Enable verbose output (ignored files etc.)')
 
