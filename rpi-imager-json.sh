@@ -17,7 +17,8 @@ set -e
 VERSION="$1"
 RELEASES_DIR="/var/www/releases"
 # order here will be the order devices appear in json
-DEVICES="RPi4 RPi2 RPi"
+DEVICES="RPi5 RPi4 RPi2 RPi"
+ARCHES="aarch64 arm"
 IMAGER_JSON="${RELEASES_DIR}/os_list_imagingutility_le.json"
 
 # Compare input against regex
@@ -38,42 +39,46 @@ EOL
 FIRST_DEVICE="yes"
 
 for DEVICE in $DEVICES; do
-  if [ -f ${RELEASES_DIR}/LibreELEC-${DEVICE}.arm-${VERSION}.img.gz ]; then
-    # Generate SHA256
-    rpi_sha256="$(gzip -d -c ${RELEASES_DIR}/LibreELEC-${DEVICE}.arm-${VERSION}.img.gz  | sha256sum | cut -d ' ' -f 1)"
-    # Generate SIZE
-    rpi_size="$(stat -c %s ${RELEASES_DIR}/LibreELEC-${DEVICE}.arm-${VERSION}.img.gz)"
-    # Generate CREATE DATE
-    rpi_date="$(stat -c %y ${RELEASES_DIR}/LibreELEC-${DEVICE}.arm-${VERSION}.img.gz  | cut -d ' ' -f 1)"
-    # Generate EXTRACTED SIZE
-    rpi_extracted="$(gzip -l ${RELEASES_DIR}/LibreELEC-${DEVICE}.arm-${VERSION}.img.gz  | sed -n '2p' | awk '{print $2}')"
+  for ARCH in $ARCHES; do
+    if [ -f ${RELEASES_DIR}/LibreELEC-${DEVICE}.${ARCH}-${VERSION}.img.gz ]; then
+      # Generate SHA256
+      rpi_sha256="$(gzip -d -c ${RELEASES_DIR}/LibreELEC-${DEVICE}.${ARCH}-${VERSION}.img.gz  | sha256sum | cut -d ' ' -f 1)"
+      # Generate SIZE
+      rpi_size="$(stat -c %s ${RELEASES_DIR}/LibreELEC-${DEVICE}.${ARCH}-${VERSION}.img.gz)"
+      # Generate CREATE DATE
+      rpi_date="$(stat -c %y ${RELEASES_DIR}/LibreELEC-${DEVICE}.${ARCH}-${VERSION}.img.gz  | cut -d ' ' -f 1)"
+      # Generate EXTRACTED SIZE
+      rpi_extracted="$(gzip -l ${RELEASES_DIR}/LibreELEC-${DEVICE}.${ARCH}-${VERSION}.img.gz  | sed -n '2p' | awk '{print $2}')"
 
-    case "$DEVICE" in
-      RPi)
-        DESC="RPi0/RPi1"
-        ;;
-      RPi2)
-        DESC="RPi2/RPi3"
-        ;;
-      RPi4)
-        DESC="RPi4"
-        ;;
-      *)
-        echo "ERROR: unknown device ${DEVICE}!" >&2; exit 1
-        ;;
-    esac
-  else
-    echo "INFO: no ${VERSION} image file found for ${DEVICE}"
-    continue
-  fi
-  if [ "$FIRST_DEVICE" = "no" ]; then
-    cat >> "${IMAGER_JSON}" << EOL
+      case "$DEVICE" in
+        RPi)
+          DESC="RPi0/RPi1"
+          ;;
+        RPi2)
+          DESC="RPi2/RPi3"
+          ;;
+        RPi4)
+          DESC="RPi4"
+          ;;
+        RPi5)
+          DESC="RPi5"
+          ;;
+        *)
+          echo "ERROR: unknown device ${DEVICE}!" >&2; exit 1
+          ;;
+      esac
+    else
+      echo "INFO: no ${VERSION} image file found for ${DEVICE}.${ARCH}"
+      continue
+    fi
+    if [ "$FIRST_DEVICE" = "no" ]; then
+      cat >> "${IMAGER_JSON}" << EOL
         },
 EOL
-  fi
-  cat >> "${IMAGER_JSON}" << EOL
+    fi
+    cat >> "${IMAGER_JSON}" << EOL
         {
-            "url": "https://releases.libreelec.tv/LibreELEC-${DEVICE}.arm-${VERSION}.img.gz",
+            "url": "https://releases.libreelec.tv/LibreELEC-${DEVICE}.${ARCH}-${VERSION}.img.gz",
             "extract_size": ${rpi_extracted},
             "extract_sha256": "${rpi_sha256}",
             "image_download_size": ${rpi_size},
@@ -83,7 +88,8 @@ EOL
             "release_date": "${rpi_date}",
             "website": "https://libreelec.tv"
 EOL
-  FIRST_DEVICE="no"
+    FIRST_DEVICE="no"
+  done
 done
 
 cat >> "${IMAGER_JSON}" << EOL
