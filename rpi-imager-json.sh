@@ -15,6 +15,8 @@ fi
 set -e
 
 VERSION="$1"
+# assumes 3 group version string (ex: 12.0.0)
+VERSION_MAJOR="${VERSION%%.*}"
 RELEASES_DIR="/var/www/releases"
 # order here will be the order devices appear in json
 DEVICES="RPi5 RPi4 RPi2 RPi"
@@ -53,15 +55,27 @@ for DEVICE in $DEVICES; do
       case "$DEVICE" in
         RPi)
           DESC="RPi0/RPi1"
+          rpi_device_compat='"pi1-32bit"'
           ;;
         RPi2)
           DESC="RPi2/RPi3"
+          rpi_device_compat='"pi2-32bit", "pi3-32bit"'
           ;;
         RPi4)
           DESC="RPi4"
+          if [ ${VERSION_MAJOR} -ge 12 ]; then
+            rpi_device_compat='"pi4-64bit"'
+          else
+            rpi_device_compat='"pi4-32bit"'
+          fi
           ;;
         RPi5)
           DESC="RPi5"
+          if [ ${VERSION_MAJOR} -ge 12 ]; then
+            rpi_device_compat='"pi5-64bit"'
+          else
+            rpi_device_compat='"pi5-32bit"'
+          fi
           ;;
         *)
           echo "ERROR: unknown device ${DEVICE}!" >&2; exit 1
@@ -86,6 +100,7 @@ EOL
             "icon": "https://releases.libreelec.tv/noobs/LibreELEC_RPi/LibreELEC_RPi.png",
             "name": "LibreELEC (${DESC})",
             "release_date": "${rpi_date}",
+            "devices": [${rpi_device_compat}],
             "website": "https://libreelec.tv"
 EOL
     FIRST_DEVICE="no"
