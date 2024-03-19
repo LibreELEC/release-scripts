@@ -159,6 +159,8 @@ class ReleaseFile():
                              'RPi3.arm': 'Raspberry Pi 3',
                              'RPi4.aarch64': 'Raspberry Pi 4 and 400',
                              'RPi4.arm': 'Raspberry Pi 4 and 400',
+                             'RPi5.aarch64': 'Raspberry Pi 5',
+                             'RPi5.arm': 'Raspberry Pi 5',
                              'S905.arm': 'Amlogic 3.14',
                              'S912.arm': 'Amlogic 3.14',
                              'Slice.arm': 'Slice CM1/CM3',
