@@ -178,6 +178,9 @@ class ManageArchive():
                 # delete if requested
                 if args.delete and os.path.isfile(f[0]):
                     os.remove(f[0])
+                    # remove companion checksum if present
+                    if os.path.isfile(f'{f[0]}.sha256'):
+                        os.remove(f'{f[0]}.sha256')
             if args.verbose:
                 print(f'Total size of purged files: {purge_filesize/(1024**2)}MiB')
         else:
