@@ -48,7 +48,6 @@ VERSIONS = [
            ]
 
 BUILDS_PER_DEVICE=10
-JSON_FILE = 'releases.json'
 DISTRO_NAME = 'LibreELEC'
 CANARY_PERIOD = 21 # Days
 PRETTYNAME = f'^{DISTRO_NAME}-.*-([0-9]+\.[0-9]+\.[0-9]+)'
@@ -66,10 +65,10 @@ class ChunkedHash():
     @staticmethod
     def file_as_blockiter(afile, blocksize=65536):
         with afile:
-          block = afile.read(blocksize)
-          while len(block) > 0:
-              yield block
-              block = afile.read(blocksize)
+            block = afile.read(blocksize)
+            while len(block) > 0:
+                yield block
+                block = afile.read(blocksize)
 
     # Calculate sha256 hash for a file
     @staticmethod
@@ -94,7 +93,7 @@ class ReleaseFile():
         return s
 
     def __init__(self, args):
-        self._json_file = JSON_FILE
+        self._json_file = args.json if args.json else 'releases.json'
         self._indir = self.rchop(args.input, os.path.sep)
         self._url = self.rchop(args.url, '/')
         self._outdir = self.rchop(args.output, os.path.sep) if args.output else self._indir
@@ -368,7 +367,10 @@ class ReleaseFile():
 
         # Add train data to json
         for train in trains:
-            self.update_json[train] = {'canary': CANARY_PERIOD, 'url': url}
+            if args.legacy:
+                self.update_json[train] = {'url': url}
+            else:
+                self.update_json[train] = {'canary': CANARY_PERIOD, 'url': url}
             self.update_json[train]['prettyname_regex'] = self._prettyname
             self.update_json[train]['project'] = {}
 
@@ -405,7 +407,10 @@ class ReleaseFile():
                         # *.tar
                         if release_file[0].endswith('.tar'):
                             uboot = []
-                            entry['file'] = {'name': release_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': release_file[6], 'subpath': file_subpath}
+                            if args.legacy:
+                                entry['file'] = {'name': release_file[0], 'sha256': file_digest, 'size': file_size}
+                            else:
+                                entry['file'] = {'name': release_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': release_file[6], 'subpath': file_subpath}
                             list_of_files.remove(release_file)
                             list_of_filenames.remove(release_file[0])
                             # check for image files with same base name to add
@@ -416,7 +421,10 @@ class ReleaseFile():
                                     # don't combine lchops; generates incorrect file_subpath for files not in subdir
                                     file_subpath = self.lchop(image_file[5], self._indir)
                                     file_subpath = self.lchop(file_subpath, '/')
-                                    entry['image'] = {'name': image_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': image_file[6], 'subpath': file_subpath}
+                                    if args.legacy:
+                                        entry['image'] = {'name': image_file[0], 'sha256': file_digest, 'size': file_size}
+                                    else:
+                                        entry['image'] = {'name': image_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': image_file[6], 'subpath': file_subpath}
                                     list_of_files.remove(image_file)
                                     list_of_filenames.remove(image_file[0])
                                 # tar goes to a device using uboot image files
@@ -428,7 +436,10 @@ class ReleaseFile():
                                             # don't combine lchops; generates incorrect file_subpath for files not in subdir
                                             file_subpath = self.lchop(uboot_file[5], self._indir)
                                             file_subpath = self.lchop(file_subpath, '/')
-                                            uboot.append({'name': uboot_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': uboot_file[6], 'subpath': file_subpath})
+                                            if args.legacy:
+                                                uboot.append({'name': uboot_file[0], 'sha256': file_digest, 'size': file_size})
+                                            else:
+                                                uboot.append({'name': uboot_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': uboot_file[6], 'subpath': file_subpath})
                                             list_of_files.remove(uboot_file)
                                             list_of_filenames.remove(uboot_file[0])
                                     if uboot:
@@ -438,7 +449,10 @@ class ReleaseFile():
                         # XXX: Quirk for LE 9.0: Skip uboot image inclusion as they weren't used in that release but generated images will be swept up in search.
                         elif release_file[4] and train != 'LibreELEC-9.0':
                             uboot = []
-                            uboot.append({'name': release_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': release_file[6], 'subpath': file_subpath})
+                            if args.legacy:
+                                uboot.append({'name': release_file[0], 'sha256': file_digest, 'size': file_size})
+                            else:
+                                uboot.append({'name': release_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': release_file[6], 'subpath': file_subpath})
                             list_of_files.remove(release_file)
                             list_of_filenames.remove(release_file[0])
                             # check for similar uboot releases
@@ -451,7 +465,10 @@ class ReleaseFile():
                                             # don't combine lchops; generates incorrect file_subpath for files not in subdir
                                             file_subpath = self.lchop(image_file[5], self._indir)
                                             file_subpath = self.lchop(file_subpath, '/')
-                                            entry['file'] = {'name': image_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': image_file[6], 'subpath': file_subpath}
+                                            if args.legacy:
+                                                entry['file'] = {'name': image_file[0], 'sha256': file_digest, 'size': file_size}
+                                            else:
+                                                entry['file'] = {'name': image_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': image_file[6], 'subpath': file_subpath}
                                             list_of_files.remove(image_file)
                                             list_of_filenames.remove(image_file[0])
                                         # other uboot images
@@ -460,14 +477,20 @@ class ReleaseFile():
                                             # don't combine lchops; generates incorrect file_subpath for files not in subdir
                                             file_subpath = self.lchop(image_file[5], self._indir)
                                             file_subpath = self.lchop(file_subpath, '/')
-                                            uboot.append({'name': image_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': image_file[6], 'subpath': file_subpath})
+                                            if args.legacy:
+                                                uboot.append({'name': image_file[0], 'sha256': file_digest, 'size': file_size})
+                                            else:
+                                                uboot.append({'name': image_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': image_file[6], 'subpath': file_subpath})
                                             list_of_files.remove(image_file)
                                             list_of_filenames.remove(image_file[0])
 
                             entry['uboot'] = uboot
                         # *.img.gz
                         elif release_file[0].endswith('.img.gz'):
-                            entry['image'] = {'name': release_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': release_file[6], 'subpath': file_subpath}
+                            if args.legacy:
+                                entry['image'] = {'name': release_file[0], 'sha256': file_digest, 'size': file_size}
+                            else:
+                                entry['image'] = {'name': release_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': release_file[6], 'subpath': file_subpath}
                             list_of_files.remove(release_file)
                             list_of_filenames.remove(release_file[0])
                             # check for tarball files with same name so they may be added
@@ -477,7 +500,10 @@ class ReleaseFile():
                                     # don't combine lchops; generates incorrect file_subpath if not in subdir
                                     file_subpath = self.lchop(tarball_file[5], self._indir)
                                     file_subpath = self.lchop(file_subpath, '/')
-                                    entry['file'] = {'name': tarball_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': tarball_file[6], 'subpath': file_subpath}
+                                    if args.legacy:
+                                        entry['file'] = {'name': tarball_file[0], 'sha256': file_digest, 'size': file_size}
+                                    else:
+                                        entry['file'] = {'name': tarball_file[0], 'sha256': file_digest, 'size': file_size, 'timestamp': tarball_file[6], 'subpath': file_subpath}
                                     list_of_files.remove(tarball_file)
                                     list_of_filenames.remove(tarball_file[0])
 
@@ -547,21 +573,27 @@ for item in VERSIONS:
 VERSIONS = _
 
 
-parser = argparse.ArgumentParser(description=f'Update {DISTRO_NAME} {JSON_FILE} with available tar/img.gz files.', \
+parser = argparse.ArgumentParser(description=f'Update {DISTRO_NAME} release json file with available tar/img.gz files.', \
                                  formatter_class=lambda prog: argparse.HelpFormatter(prog,max_help_position=25,width=90))
 
 parser.add_argument('-i', '--input', metavar='DIRECTORY', required=True, \
-                    help=f'Directory to parsed (release files, and any existing {JSON_FILE}). By default, {JSON_FILE} will be ' \
-                         'written into this directory. Required property.')
+                    help=f'Directory to parsed (release files, and any existing json file (with the same name). By default, ' \
+                         'the json file will be written into this directory. Required property.')
 
-parser.add_argument('-u', '--url', metavar='URL', required=True, \
-                    help=f'Base URL for {JSON_FILE}. Required property.')
+parser.add_argument('-j', '--json', metavar='JSONNAME', required=False, \
+                    help='Filename of generated json file.')
+
+parser.add_argument('-l', '--legacy', action='store_true', \
+                    help='Generate legacy formatted json')
 
 parser.add_argument('-o', '--output', metavar='DIRECTORY', required=False, \
-                    help=f'Optional directory into which {JSON_FILE} will be written. Defaults to same directory as --input.')
+                    help=f'Optional directory into which json file will be written. Defaults to same directory as --input.')
 
 parser.add_argument('-p', '--prettyname', metavar='REGEX', required=False, \
                     help=f'Optional prettyname regex, default is {PRETTYNAME}')
+
+parser.add_argument('-u', '--url', metavar='URL', required=True, \
+                    help=f'Base URL for json file. Required property.')
 
 parser.add_argument('-v', '--verbose', action="store_true", help='Enable verbose output (ignored files etc.)')
 
