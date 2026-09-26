@@ -137,6 +137,7 @@ class ReleaseFile():
                              'H5.arm': 'Allwinner H5',
                              'H6.aarch64': 'Allwinner H6',
                              'H6.arm': 'Allwinner H6',
+                             'H616.aarch64': 'Allwinner H616',
                              'imx6.arm': 'NXP i.MX6',
                              'iMX6.arm': 'NXP i.MX6',
                              'iMX8.arm': 'NXP i.MX8',
