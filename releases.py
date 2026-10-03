@@ -128,6 +128,7 @@ class ReleaseFile():
                              'A64.arm': 'Allwinner A64',
                              'AMLGX.aarch64': 'Amlogic GXBB/GXL/GXM',
                              'AMLGX.arm': 'Amlogic GXBB/GXL/GXM',
+                             'Amlogic.aarch64': 'Amlogic GX/G12/SM1',
                              'Dragonboard.arm': 'Qualcomm Dragonboard',
                              'FORMAT.any': 'Tools',
                              'Generic.x86_64': 'Generic (AMD/Intel)',
